@@ -2,14 +2,14 @@
 # $ conda create --name <env> --file <this file>
 # platform: osx-arm64
 # created-by: conda 24.9.2
-fastapi=0.115.12=pypi_0
-sqlalchemy=2.0.40=pypi_0
-pydantic=2.11.4=pyh3cfb1c2_0
-pydantic-settings=2.6.1=py39hca03da5_0
-passlib=1.7.4=pyhd3eb1b0_0
-python-jose=3.3.0=pyhd3eb1b0_0
-aiosmtplib=4.0.0=pyhd8ed1ab_0
-httpx=0.28.1=py39hca03da5_0
-email-validator=2.2.0=pypi_0
-python-dotenv=1.1.0=py39hca03da5_0
-uvicorn=0.34.2=pypi_0
+fastapi=0.115.12
+sqlalchemy=2.0.40
+pydantic=2.11.4
+pydantic-settings=2.6.1
+passlib=1.7.4
+python-jose=3.3.0
+aiosmtplib=4.0.0
+httpx=0.28.1
+email-validator=2.2.0
+python-dotenv=1.1.0
+uvicorn=0.34.2
