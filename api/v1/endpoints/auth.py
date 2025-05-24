@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlencode
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from models.user import User
+from datetime import datetime, timedelta, UTC
 
 router = APIRouter()
 
@@ -83,8 +84,10 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     user = authenticate_user(db, request.email, request.password)
     if not user or not user.is_verified:
         raise HTTPException(status_code=401, detail="Invalid credentials or email not verified")
-    access_token = create_access_token({"user_id": user.id, "email": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token({"user_id": user.id, "email": user.email}, expires_delta=expires_delta)
+    expires_at = datetime.now(UTC) + expires_delta
+    return {"access_token": access_token, "token_type": "bearer", "expires_at": expires_at}
 
 @router.get(
     "/login/google",
@@ -125,8 +128,10 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
     if not code:
         raise HTTPException(status_code=400, detail="Missing code in callback")
     user = get_or_create_user_by_google_oauth(db, code, settings.GOOGLE_REDIRECT_URI)
-    access_token = create_access_token({"user_id": user.id, "email": user.email})
-    return {"access_token": access_token, "token_type": "bearer"}
+    expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    access_token = create_access_token({"user_id": user.id, "email": user.email}, expires_delta=expires_delta)
+    expires_at = datetime.now(UTC) + expires_delta
+    return {"access_token": access_token, "token_type": "bearer", "expires_at": expires_at}
 
 @router.get(
     "/me",
