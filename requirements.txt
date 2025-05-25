@@ -13,3 +13,4 @@ httpx
 email-validator
 python-dotenv
 uvicorn
+pika
