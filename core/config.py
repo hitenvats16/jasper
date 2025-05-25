@@ -17,6 +17,18 @@ class Settings(BaseSettings):
     GOOGLE_CLIENT_ID: str
     GOOGLE_CLIENT_SECRET: str
     GOOGLE_REDIRECT_URI: str
+    AWS_ACCESS_KEY_ID: str
+    AWS_SECRET_ACCESS_KEY: str
+    AWS_REGION: str
+    AWS_S3_BUCKET: str
+    
+    # RabbitMQ settings
+    RABBITMQ_HOST: str = "localhost"
+    RABBITMQ_PORT: int = 5672
+    RABBITMQ_USER: str = "user"
+    RABBITMQ_PASSWORD: str = "password"
+    RABBITMQ_VHOST: str = "/"
+    VOICE_PROCESSING_QUEUE: str = "voice_processing"
 
     class Config:
         env_file = ".env"

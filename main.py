@@ -3,6 +3,7 @@ from api.v1.endpoints import auth
 from db.session import engine, Base
 import os
 import uvicorn
+from api.v1.endpoints import voice
 
 def on_startup():
     # Create all tables (flush models with DB)
@@ -15,6 +16,7 @@ async def health():
     return {"status": "🔥", "message": "System is absolutely crushing it right now 💪"}
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
+app.include_router(voice.router, prefix="/api/v1/voice", tags=["voice"])
 
 # Future: include other modules (voice-management, project-management, etc)
 

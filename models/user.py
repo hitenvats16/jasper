@@ -14,6 +14,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
     oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
+    voices = relationship("Voice", back_populates="user", cascade="all, delete-orphan")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_accounts"
