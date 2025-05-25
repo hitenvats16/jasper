@@ -12,7 +12,16 @@ from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from models.user import User
 from datetime import datetime, timedelta, timezone
 
-router = APIRouter()
+router = APIRouter(
+    prefix="/auth",
+    tags=["Authentication"],
+    responses={
+        401: {"description": "Unauthorized - Invalid or expired token"},
+        403: {"description": "Forbidden - Insufficient permissions"},
+        404: {"description": "Not Found - Resource not found"},
+        422: {"description": "Validation Error - Invalid request data"}
+    }
+)
 
 def get_db():
     db = SessionLocal()
@@ -24,6 +33,10 @@ def get_db():
 security = HTTPBearer()
 
 def get_current_user(db: Session = Depends(get_db), credentials: HTTPAuthorizationCredentials = Security(security)):
+    """
+    Dependency to get the current authenticated user from the JWT token.
+    Raises 401 if token is invalid or expired, 404 if user not found.
+    """
     token = credentials.credentials
     payload = decode_access_token(token)
     if not payload:
@@ -37,13 +50,36 @@ def get_current_user(db: Session = Depends(get_db), credentials: HTTPAuthorizati
     "/register",
     response_model=UserRead,
     status_code=status.HTTP_201_CREATED,
-    summary="Register a new user with email/password",
-    description="Register a new user using email and password. Sends a verification code to the user's email.",
-    tags=["auth"],
+    summary="Register a new user",
+    description="""
+    Register a new user with email and password authentication.
+    
+    - Sends a verification code to the provided email address
+    - Email must be unique and not already registered
+    - Password must meet security requirements
+    - Returns the created user object (without sensitive data)
+    
+    **Note:** Email verification is required before login
+    """,
+    responses={
+        201: {"description": "User successfully registered"},
+        400: {"description": "Invalid input data or email already registered"}
+    },
+    tags=["Authentication"]
 )
 def register(request: RegisterRequest, db: Session = Depends(get_db)):
     """
-    Register a new user with email and password. Sends a verification code to the user's email address.
+    Register a new user with email and password.
+    
+    Args:
+        request: Registration data including email and password
+        db: Database session
+    
+    Returns:
+        UserRead: Created user object
+        
+    Raises:
+        HTTPException: If email is already registered or input is invalid
     """
     try:
         user = register_user(db, request)
@@ -56,12 +92,34 @@ def register(request: RegisterRequest, db: Session = Depends(get_db)):
     response_model=UserRead,
     status_code=status.HTTP_200_OK,
     summary="Verify user email",
-    description="Verify a user's email address using the code sent to their email.",
-    tags=["auth"],
+    description="""
+    Verify a user's email address using the verification code.
+    
+    - Code is sent to user's email during registration
+    - Code expires after a certain time period
+    - User must be verified before they can log in
+    
+    **Note:** This endpoint is required to complete the registration process
+    """,
+    responses={
+        200: {"description": "Email successfully verified"},
+        400: {"description": "Invalid or expired verification code"}
+    },
+    tags=["Authentication"]
 )
 def verify(request: EmailVerificationRequest, db: Session = Depends(get_db)):
     """
-    Verify a user's email address using the code sent to their email.
+    Verify a user's email address using the verification code.
+    
+    Args:
+        request: Verification data including email and code
+        db: Database session
+    
+    Returns:
+        UserRead: Updated user object with verified status
+        
+    Raises:
+        HTTPException: If code is invalid or expired
     """
     try:
         user = verify_email(db, request.email, request.code)
@@ -74,12 +132,35 @@ def verify(request: EmailVerificationRequest, db: Session = Depends(get_db)):
     response_model=Token,
     status_code=status.HTTP_200_OK,
     summary="Login with email and password",
-    description="Authenticate a user using email and password. Returns a JWT access token.",
-    tags=["auth"],
+    description="""
+    Authenticate a user and generate a JWT access token.
+    
+    - Requires valid email and password
+    - Email must be verified
+    - Returns JWT token with expiration time
+    - Token must be included in Authorization header for protected endpoints
+    
+    **Note:** Token expires after a configurable time period
+    """,
+    responses={
+        200: {"description": "Successfully authenticated"},
+        401: {"description": "Invalid credentials or email not verified"}
+    },
+    tags=["Authentication"]
 )
 def login(request: LoginRequest, db: Session = Depends(get_db)):
     """
-    Authenticate a user using email and password. Returns a JWT access token if credentials are valid and email is verified.
+    Authenticate a user and generate a JWT access token.
+    
+    Args:
+        request: Login credentials (email and password)
+        db: Database session
+    
+    Returns:
+        Token: JWT access token with expiration time
+        
+    Raises:
+        HTTPException: If credentials are invalid or email not verified
     """
     user = authenticate_user(db, request.email, request.password)
     if not user or not user.is_verified:
@@ -93,12 +174,26 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     "/login/google",
     status_code=status.HTTP_307_TEMPORARY_REDIRECT,
     summary="Initiate Google OAuth login",
-    description="Redirects the user to Google's OAuth 2.0 consent screen.",
-    tags=["auth"],
+    description="""
+    Redirect to Google's OAuth 2.0 consent screen.
+    
+    - Initiates the Google OAuth 2.0 authentication flow
+    - User will be redirected to Google's login page
+    - After successful authentication, user will be redirected back to the callback URL
+    
+    **Note:** This endpoint is part of the Google OAuth 2.0 flow
+    """,
+    responses={
+        307: {"description": "Redirect to Google OAuth consent screen"}
+    },
+    tags=["Authentication"]
 )
 def login_google():
     """
-    Redirect the user to Google's OAuth 2.0 consent screen to initiate Google login.
+    Redirect to Google's OAuth 2.0 consent screen.
+    
+    Returns:
+        Response: Redirect response to Google's consent screen
     """
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
@@ -109,7 +204,6 @@ def login_google():
         "prompt": "consent",
     }
     url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
-    print(url)
     return Response(status_code=302, headers={"Location": url})
 
 @router.get(
@@ -117,12 +211,35 @@ def login_google():
     response_model=Token,
     status_code=status.HTTP_200_OK,
     summary="Google OAuth callback",
-    description="Handles the callback from Google OAuth, exchanges code for tokens, and returns a JWT access token.",
-    tags=["auth"],
+    description="""
+    Handle Google OAuth callback and generate JWT token.
+    
+    - Processes the OAuth callback from Google
+    - Creates or updates user account
+    - Generates JWT access token
+    - Returns token with expiration time
+    
+    **Note:** This endpoint is called by Google after successful authentication
+    """,
+    responses={
+        200: {"description": "Successfully authenticated with Google"},
+        400: {"description": "Invalid or missing OAuth code"}
+    },
+    tags=["Authentication"]
 )
 def google_callback(request: Request, db: Session = Depends(get_db)):
     """
-    Handles the callback from Google OAuth, exchanges the code for tokens, fetches user info, creates or updates the user, and returns a JWT access token.
+    Handle Google OAuth callback and generate JWT token.
+    
+    Args:
+        request: FastAPI request object containing OAuth code
+        db: Database session
+    
+    Returns:
+        Token: JWT access token with expiration time
+        
+    Raises:
+        HTTPException: If OAuth code is invalid or missing
     """
     code = request.query_params.get("code")
     if not code:
@@ -137,13 +254,32 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
     "/me",
     response_model=UserRead,
     status_code=status.HTTP_200_OK,
-    summary="Get current user info",
-    description="Get the authenticated user's information.",
-    tags=["auth"],
+    summary="Get current user profile",
+    description="""
+    Retrieve the authenticated user's profile information.
+    
+    - Requires valid JWT token
+    - Returns user's profile data
+    - Includes OAuth account information if available
+    
+    **Note:** This endpoint is protected and requires authentication
+    """,
+    responses={
+        200: {"description": "Successfully retrieved user profile"},
+        401: {"description": "Invalid or expired token"},
+        404: {"description": "User not found"}
+    },
+    tags=["Authentication"]
 )
 def get_me(current_user: User = Depends(get_current_user)):
     """
-    Get the authenticated user's information.
+    Get the authenticated user's profile information.
+    
+    Args:
+        current_user: Current authenticated user (from dependency)
+    
+    Returns:
+        UserRead: User's profile information
     """
     return current_user
 
@@ -151,13 +287,34 @@ def get_me(current_user: User = Depends(get_current_user)):
     "/me",
     response_model=UserRead,
     status_code=status.HTTP_200_OK,
-    summary="Update current user info",
-    description="Update the authenticated user's information.",
-    tags=["auth"],
+    summary="Update current user profile",
+    description="""
+    Update the authenticated user's profile information.
+    
+    - Requires valid JWT token
+    - Can update user's active status and verification status
+    - Returns updated user profile
+    
+    **Note:** This endpoint is protected and requires authentication
+    """,
+    responses={
+        200: {"description": "Successfully updated user profile"},
+        401: {"description": "Invalid or expired token"},
+        404: {"description": "User not found"}
+    },
+    tags=["Authentication"]
 )
 def update_me(update: UserUpdate, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
     """
-    Update the authenticated user's information.
+    Update the authenticated user's profile information.
+    
+    Args:
+        update: User update data
+        db: Database session
+        current_user: Current authenticated user (from dependency)
+    
+    Returns:
+        UserRead: Updated user profile information
     """
     user = db.query(User).filter_by(id=current_user.id).first()
     if update.is_active is not None:

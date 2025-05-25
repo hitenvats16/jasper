@@ -1,22 +1,156 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, Depends
 from api.v1.endpoints import auth
 from db.session import engine, Base
 import os
 import uvicorn
 from api.v1.endpoints import voice
+from fastapi.openapi.utils import get_openapi
+from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
 
 def on_startup():
     # Create all tables (flush models with DB)
     Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="jasper-voice-gateway", on_startup=[on_startup])
+# Initialize rate limiter
+limiter = Limiter(key_func=get_remote_address)
+
+app = FastAPI(
+    title="Jasper Voice Gateway API",
+    description="""
+    Jasper Voice Gateway API Documentation
+
+    Welcome to the Jasper Voice Gateway API! This API provides endpoints for voice processing, management, and analysis.
+
+    Features:
+    - Authentication: Secure user authentication with JWT tokens
+    - Voice Processing: Upload and process voice samples
+    - Voice Management: Create, update, and manage voice profiles
+    - Asynchronous Processing: Background job processing with RabbitMQ
+    - Cloud Storage: S3 integration for voice file storage
+
+    Getting Started:
+    1. Register a new account using the /auth/register endpoint
+    2. Verify your email using the code sent to your inbox
+    3. Login to get your access token
+    4. Use the token in the Authorization header for protected endpoints
+
+    Authentication:
+    All protected endpoints require a valid JWT token in the Authorization header:
+    Authorization: Bearer <your_token>
+
+    Rate Limiting:
+    - API calls are limited to 100 requests per minute per IP
+    - File uploads are limited to 50MB per file
+    """,
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json",
+    on_startup=[on_startup]
+)
+
+# Add rate limiter to app state
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # In production, replace with specific origins
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+def custom_openapi():
+    if app.openapi_schema:
+        return app.openapi_schema
+    
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        description=app.description,
+        routes=app.routes,
+    )
+    
+    # Add security scheme
+    openapi_schema["components"]["securitySchemes"] = {
+        "Bearer": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+            "description": "Enter your JWT token in the format: Bearer <token>"
+        }
+    }
+    
+    # Add global security requirement
+    openapi_schema["security"] = [{"Bearer": []}]
+    
+    # Add server information
+    openapi_schema["servers"] = [
+        {
+            "url": "http://localhost:8000",
+            "description": "Local development server"
+        },
+        {
+            "url": "https://api.jasper.ai",
+            "description": "Production server"
+        }
+    ]
+    
+    # Add tags metadata
+    openapi_schema["tags"] = [
+        {
+            "name": "Authentication",
+            "description": "User authentication and authorization endpoints",
+            "externalDocs": {
+                "description": "Authentication Guide",
+                "url": "https://docs.jasper.ai/auth"
+            }
+        },
+        {
+            "name": "Voice Management",
+            "description": "Voice sample processing and management endpoints",
+            "externalDocs": {
+                "description": "Voice Processing Guide",
+                "url": "https://docs.jasper.ai/voice"
+            }
+        }
+    ]
+    
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+app.openapi = custom_openapi
 
 @app.get("/health")
-async def health():
-    return {"status": "🔥", "message": "System is absolutely crushing it right now 💪"}
+@limiter.limit("100/minute")
+async def health(request: Request):
+    return {
+        "status": "🔥",
+        "message": "System is absolutely crushing it right now 💪",
+        "version": app.version,
+        "environment": os.getenv("ENVIRONMENT", "development")
+    }
 
-app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(voice.router, prefix="/api/v1/voices", tags=["voices"])
+# Include routers with rate limiting
+app.include_router(
+    auth.router,
+    prefix="/api/v1/auth",
+    tags=["Authentication"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
+
+app.include_router(
+    voice.router,
+    prefix="/api/v1/voices",
+    tags=["Voice Management"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
 
 # Future: include other modules (voice-management, project-management, etc)
 
