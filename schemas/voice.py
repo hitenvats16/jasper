@@ -5,7 +5,7 @@ from datetime import datetime
 class VoiceBase(BaseModel):
     name: str
     description: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = None
+    voice_metadata: Optional[Dict[str, Any]] = None
 
 class VoiceCreate(VoiceBase):
     pass
@@ -21,7 +21,7 @@ class VoiceRead(VoiceBase):
     updated_at: Optional[datetime] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class VoiceList(BaseModel):
     items: List[VoiceRead]

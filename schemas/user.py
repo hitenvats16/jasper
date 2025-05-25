@@ -1,11 +1,12 @@
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List
+from datetime import datetime
 
 class OAuthAccountRead(BaseModel):
     provider: str
     provider_user_id: str
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserBase(BaseModel):
     email: EmailStr
@@ -17,9 +18,12 @@ class UserCreate(UserBase):
 
 class UserRead(UserBase):
     id: int
+    created_at: datetime
+    updated_at: Optional[datetime] = None
     oauth_accounts: List[OAuthAccountRead] = []
+
     class Config:
-        orm_mode = True
+        from_attributes = True
 
 class UserUpdate(BaseModel):
     is_active: Optional[bool]

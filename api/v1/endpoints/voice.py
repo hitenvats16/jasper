@@ -87,7 +87,7 @@ def get_voice_job(job_id: int, db: Session = Depends(get_db)):
     return job
 
 @router.get(
-    "/voices",
+    "/list",
     response_model=VoiceList,
     status_code=status.HTTP_200_OK,
     summary="List user's voices",
@@ -106,7 +106,7 @@ def list_voices(
     return {"items": voices, "total": total}
 
 @router.post(
-    "/voices",
+    "/create",
     response_model=VoiceRead,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new voice",
@@ -141,7 +141,7 @@ async def create_voice(
     return voice
 
 @router.get(
-    "/voices/{voice_id}",
+    "/{voice_id}",
     response_model=VoiceRead,
     status_code=status.HTTP_200_OK,
     summary="Get voice details",
@@ -160,7 +160,7 @@ def get_voice(
     return voice
 
 @router.put(
-    "/voices/{voice_id}",
+    "/{voice_id}",
     response_model=VoiceRead,
     status_code=status.HTTP_200_OK,
     summary="Update voice details",
@@ -187,7 +187,7 @@ def update_voice(
     return voice
 
 @router.delete(
-    "/voices/{voice_id}",
+    "/{voice_id}",
     status_code=status.HTTP_204_NO_CONTENT,
     summary="Delete a voice",
     description="Delete a voice and its associated file from S3.",

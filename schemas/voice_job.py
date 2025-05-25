@@ -14,4 +14,4 @@ class VoiceProcessingJobRead(BaseModel):
     error: Optional[str]
 
     class Config:
-        orm_mode = True 
+        from_attributes = True 

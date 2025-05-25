@@ -16,7 +16,7 @@ async def health():
     return {"status": "🔥", "message": "System is absolutely crushing it right now 💪"}
 
 app.include_router(auth.router, prefix="/api/v1/auth", tags=["auth"])
-app.include_router(voice.router, prefix="/api/v1/voice", tags=["voice"])
+app.include_router(voice.router, prefix="/api/v1/voices", tags=["voices"])
 
 # Future: include other modules (voice-management, project-management, etc)
 
