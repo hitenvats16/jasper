@@ -5,7 +5,6 @@ from schemas.voice_job import VoiceProcessingJobCreate, VoiceProcessingJobRead
 from schemas.voice import VoiceCreate, VoiceUpdate, VoiceRead, VoiceList
 from models.voice_job import VoiceProcessingJob, JobStatus
 from models.voice import Voice
-from workers.rabbitmq import RabbitMQManager
 from utils.s3 import upload_file_to_s3, delete_file_from_s3
 import json
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
@@ -14,6 +13,7 @@ from models.user import User
 from typing import Optional
 from sqlalchemy import func
 from core.config import settings
+from utils.message_publisher import publish_voice_job
 
 router = APIRouter(
     prefix="/voice",
@@ -25,9 +25,6 @@ router = APIRouter(
         422: {"description": "Validation Error - Invalid request data"}
     }
 )
-
-# RabbitMQ manager instance
-rabbitmq_manager = RabbitMQManager()
 
 security = HTTPBearer()
 
@@ -109,10 +106,7 @@ async def enqueue_voice_job(
     db.refresh(job)
     
     # Publish job to RabbitMQ queue
-    rabbitmq_manager.publish_message(
-        settings.VOICE_PROCESSING_QUEUE,
-        {"job_id": job.id}
-    )
+    publish_voice_job(job.id)
     return job
 
 @router.get(
