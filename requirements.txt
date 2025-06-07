@@ -22,3 +22,4 @@ python-multipart
 alembic
 psycopg2-binary
 requests
+melo

@@ -10,6 +10,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
+from api.v1.endpoints import credit_router, rate_router
 
 def on_startup():
     # Create all tables (flush models with DB)
@@ -149,6 +150,20 @@ app.include_router(
     voice.router,
     prefix="/api/v1/voices",
     tags=["Voice Management"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
+
+app.include_router(
+    credit_router,
+    prefix="/api/v1/credits",
+    tags=["Credits"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
+
+app.include_router(
+    rate_router,
+    prefix="/api/v1/rates",
+    tags=["Rates"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 

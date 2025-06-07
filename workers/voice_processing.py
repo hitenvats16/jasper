@@ -47,4 +47,4 @@ def process_message(ch, method, properties, body):
     except Exception as e:
         logger.error(f"Error processing message: {str(e)}")
         # Reject the message and requeue it
-        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True) 
+        ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
