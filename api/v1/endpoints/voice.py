@@ -1,4 +1,4 @@
-from fastapi import APIRouter, status, Depends, File, UploadFile, Form, HTTPException, Request, Security, Query
+from fastapi import APIRouter, status, Depends, File, UploadFile, Form, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 from db.session import SessionLocal
 from schemas.voice_job import VoiceProcessingJobCreate, VoiceProcessingJobRead
@@ -7,13 +7,16 @@ from models.voice_job import VoiceProcessingJob, JobStatus
 from models.voice import Voice
 from utils.s3 import upload_file_to_s3, delete_file_from_s3
 import json
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from core.security import decode_access_token
 from models.user import User
-from typing import Optional
+from typing import Optional, List
 from sqlalchemy import func
 from core.config import settings
-from utils.message_publisher import publish_voice_job
+from utils.message_publisher import publish_voice_job, message_publisher
+from core.dependencies import get_db, get_current_user
+import uuid
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(
     prefix="/voice",
@@ -25,89 +28,6 @@ router = APIRouter(
         422: {"description": "Validation Error - Invalid request data"}
     }
 )
-
-security = HTTPBearer()
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
-def get_current_user(db: Session = Depends(get_db), credentials: HTTPAuthorizationCredentials = Security(security)):
-    """
-    Dependency to get the current authenticated user from the JWT token.
-    Raises 401 if token is invalid or expired, 404 if user not found.
-    """
-    token = credentials.credentials
-    payload = decode_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    user = db.query(User).filter_by(id=payload["user_id"]).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
-
-@router.post(
-    "/process",
-    response_model=VoiceProcessingJobRead,
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Process voice sample",
-    description="""
-    Upload and process a voice sample for analysis.
-    
-    - Accepts audio file upload
-    - Stores file in S3
-    - Creates processing job
-    - Enqueues job for asynchronous processing
-    
-    **Note:** 
-    - File must be a valid audio format
-    - Processing is asynchronous
-    - Job status can be checked using the job ID
-    """,
-    responses={
-        202: {"description": "Job successfully created and queued"},
-        400: {"description": "Invalid file format or metadata"},
-        401: {"description": "Unauthorized - Invalid or expired token"}
-    },
-    tags=["Voice Management"]
-)
-async def enqueue_voice_job(
-    file: UploadFile = File(...),
-    metadata: str = Form(None),
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Upload and process a voice sample.
-    
-    Args:
-        file: Audio file to process
-        metadata: Optional JSON string containing additional metadata
-        db: Database session
-        current_user: Current authenticated user
-    
-    Returns:
-        VoiceProcessingJobRead: Created job information
-        
-    Raises:
-        HTTPException: If file format is invalid or metadata is malformed
-    """
-    try:
-        meta_dict = json.loads(metadata) if metadata else None
-    except Exception:
-        raise HTTPException(status_code=400, detail="Invalid metadata JSON")
-    s3_url = upload_file_to_s3(file.file, file.filename, file.content_type)
-    job = VoiceProcessingJob(s3_link=s3_url, metadata=meta_dict, status=JobStatus.QUEUED)
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-    
-    # Publish job to RabbitMQ queue
-    publish_voice_job(job.id)
-    return job
 
 @router.get(
     "/jobs/{job_id}",
@@ -129,24 +49,81 @@ async def enqueue_voice_job(
     },
     tags=["Voice Management"]
 )
-def get_voice_job(job_id: int, db: Session = Depends(get_db)):
+def get_voice_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
     """
     Get the status and results of a voice processing job.
     
     Args:
         job_id: ID of the job to retrieve
         db: Database session
+        current_user: Current authenticated user
     
     Returns:
         VoiceProcessingJobRead: Job status and results
         
     Raises:
-        HTTPException: If job is not found
+        HTTPException: If job is not found or user doesn't have access
     """
-    job = db.query(VoiceProcessingJob).filter_by(id=job_id).first()
+    job = db.query(VoiceProcessingJob).filter_by(id=job_id, user_id=current_user.id).first()
     if not job:
         raise HTTPException(status_code=404, detail="Job not found")
     return job
+
+@router.get(
+    "/jobs",
+    response_model=List[VoiceProcessingJobRead],
+    status_code=status.HTTP_200_OK,
+    summary="List user's jobs",
+    description="""
+    Retrieve a list of the user's voice processing jobs.
+    
+    - Supports pagination with skip and limit parameters
+    - Returns jobs ordered by creation date (newest first)
+    - Includes job status and results
+    
+    **Note:** Results are ordered by creation date (newest first)
+    """,
+    responses={
+        200: {"description": "Successfully retrieved job list"},
+        401: {"description": "Unauthorized - Invalid or expired token"}
+    },
+    tags=["Voice Management"]
+)
+def list_voice_jobs(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(10, ge=1, le=100, description="Maximum number of records to return"),
+    voice_id: Optional[int] = Query(None, description="Filter jobs by voice ID"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    List all voice processing jobs for the authenticated user with pagination.
+    
+    Args:
+        skip: Number of records to skip (for pagination)
+        limit: Maximum number of records to return
+        voice_id: Optional voice ID to filter jobs
+        db: Database session
+        current_user: Current authenticated user
+    
+    Returns:
+        List[VoiceProcessingJobRead]: List of voice processing jobs
+    """
+    query = db.query(VoiceProcessingJob).filter(VoiceProcessingJob.user_id == current_user.id)
+    
+    if voice_id:
+        # Verify voice ownership
+        voice = db.query(Voice).filter_by(id=voice_id, user_id=current_user.id).first()
+        if not voice:
+            raise HTTPException(status_code=404, detail="Voice not found")
+        query = query.filter(VoiceProcessingJob.voice_id == voice_id)
+    
+    jobs = query.order_by(VoiceProcessingJob.created_at.desc()).offset(skip).limit(limit).all()
+    return jobs
 
 @router.get(
     "/list",
@@ -244,18 +221,58 @@ async def create_voice(
         meta_dict = json.loads(metadata) if metadata else None
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid metadata JSON")
-    
-    s3_url = upload_file_to_s3(file.file, file.filename, file.content_type)
+
+    # Upload file to S3
+    s3_link = upload_file_to_s3(file.file, file.filename, file.content_type)
+
+    # Create voice record
     voice = Voice(
         name=name,
         description=description,
-        s3_link=s3_url,
         voice_metadata=meta_dict,
+        s3_link=s3_link,
         user_id=current_user.id
     )
     db.add(voice)
     db.commit()
     db.refresh(voice)
+
+    print("created voice",voice)
+
+    # Create processing job
+    job = VoiceProcessingJob(
+        s3_link=s3_link,
+        status=JobStatus.QUEUED,
+        user_id=current_user.id,
+        voice_id=voice.id,
+        meta_data={
+            "filename": file.filename,
+            "name": name,
+            "description": description,
+            "metadata": meta_dict
+        }
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    print("created job",job)
+    
+    # Publish message to queue
+    message = {
+        "job_id": job.id,
+        "s3_link": s3_link,
+        "user_id": current_user.id,
+        "voice_id": voice.id,
+        "metadata": {
+            "filename": file.filename,
+            "name": name,
+            "description": description,
+            "metadata": meta_dict
+        }
+    }
+    message_publisher.publish(settings.VOICE_PROCESSING_QUEUE, message)
+    
     return voice
 
 @router.get(
@@ -349,8 +366,7 @@ def update_voice(
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
     
-    update_data = voice_update.dict(exclude_unset=True)
-    for field, value in update_data.items():
+    for field, value in voice_update.dict(exclude_unset=True).items():
         setattr(voice, field, value)
     
     db.commit()
@@ -399,7 +415,7 @@ def delete_voice(
     Raises:
         HTTPException: If voice is not found or not owned by user
     """
-    voice = db.query(Voice).filter(Voice.id == voice_id, Voice.user_id == current_user.id).first()
+    voice = db.query(Voice).filter_by(id=voice_id, user_id=current_user.id).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
     
@@ -407,8 +423,7 @@ def delete_voice(
     try:
         delete_file_from_s3(voice.s3_link)
     except Exception as e:
-        # Log the error but continue with database deletion
-        print(f"Error deleting file from S3: {str(e)}")
+        logger.error(f"Error deleting file from S3: {str(e)}")
     
     # Delete from database
     db.delete(voice)

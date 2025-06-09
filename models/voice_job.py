@@ -1,4 +1,5 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum, func
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum, func, ForeignKey
+from sqlalchemy.orm import relationship
 from db.session import Base
 import enum
 
@@ -18,4 +19,12 @@ class VoiceProcessingJob(Base):
     result = Column(JSON, nullable=True)
     error = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now()) 
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Add foreign keys
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    voice_id = Column(Integer, ForeignKey("voices.id"), nullable=True)  # Optional since not all jobs are for voice creation
+    
+    # Add relationships
+    user = relationship("User", back_populates="voice_jobs")
+    voice = relationship("Voice", back_populates="processing_jobs") 

@@ -1,6 +1,7 @@
 from pydantic import BaseModel, HttpUrl
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+from schemas.voice_job import VoiceProcessingJobRead
 
 class VoiceBase(BaseModel):
     name: str
@@ -15,10 +16,11 @@ class VoiceUpdate(VoiceBase):
 
 class VoiceRead(VoiceBase):
     id: int
-    s3_link: HttpUrl
+    s3_link: str
     user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
+    processing_jobs: Optional[List[VoiceProcessingJobRead]] = None
 
     class Config:
         from_attributes = True

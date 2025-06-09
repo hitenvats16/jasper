@@ -16,6 +16,7 @@ class User(Base):
     oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
     voices = relationship("Voice", back_populates="user", cascade="all, delete-orphan")
     credit = relationship("UserCredit", back_populates="user", uselist=False, cascade="all, delete-orphan")
+    voice_jobs = relationship("VoiceProcessingJob", back_populates="user", cascade="all, delete-orphan")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_accounts"

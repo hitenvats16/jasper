@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request, Depends
 from api.v1.endpoints import auth
-from db.session import engine, Base
+from db.session import engine, Base, init_db
 import os
 import uvicorn
 from api.v1.endpoints import voice
@@ -11,10 +11,42 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
 from api.v1.endpoints import credit_router, rate_router
+from core.dependencies import get_optional_user
+from models.user import User
+import logging
+import sys
+from utils.message_publisher import get_rabbitmq_connection
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[
+        logging.StreamHandler(sys.stdout)
+    ]
+)
+
+logger = logging.getLogger(__name__)
 
 def on_startup():
-    # Create all tables (flush models with DB)
-    Base.metadata.create_all(bind=engine)
+    try:
+        # Initialize database
+        logger.info("Initializing database...")
+        init_db()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {str(e)}")
+        raise
+    
+    # Test RabbitMQ connection in a non-blocking way
+    try:
+        logger.info("Testing RabbitMQ connection...")
+        connection = get_rabbitmq_connection()
+        connection.close()
+        logger.info("Successfully connected to RabbitMQ")
+    except Exception as e:
+        logger.warning(f"RabbitMQ connection failed: {str(e)}")
+        logger.warning("Application will start without RabbitMQ. Some features may be limited.")
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -130,39 +162,53 @@ app.openapi = custom_openapi
 
 @app.get("/health")
 @limiter.limit("100/minute")
-async def health(request: Request):
-    return {
+async def health(
+    request: Request,
+    current_user: User = Depends(get_optional_user)
+):
+    """
+    Health check endpoint that can optionally include user information if authenticated.
+    """
+    response = {
         "status": "🔥",
         "message": "System is absolutely crushing it right now 💪",
         "version": app.version,
         "environment": os.getenv("ENVIRONMENT", "development")
     }
+    
+    if current_user:
+        response["user"] = {
+            "id": current_user.id,
+            "email": current_user.email
+        }
+    
+    return response
 
 # Include routers with rate limiting
 app.include_router(
     auth.router,
-    prefix="/api/v1/auth",
+    prefix="/api/v1",
     tags=["Authentication"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 
 app.include_router(
     voice.router,
-    prefix="/api/v1/voices",
+    prefix="/api/v1",
     tags=["Voice Management"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 
 app.include_router(
     credit_router,
-    prefix="/api/v1/credits",
+    prefix="/api/v1",
     tags=["Credits"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 
 app.include_router(
     rate_router,
-    prefix="/api/v1/rates",
+    prefix="/api/v1",
     tags=["Rates"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )

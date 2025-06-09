@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks, Request, Response, Security
 from sqlalchemy.orm import Session
-from db.session import SessionLocal
+from db.session import SessionLocal, get_db
 from schemas.auth import RegisterRequest, LoginRequest, EmailVerificationRequest, Token
 from schemas.user import UserRead, UserUpdate
 from services.auth_service import register_user, verify_email, authenticate_user, get_or_create_user_by_google_oauth
@@ -22,13 +22,6 @@ router = APIRouter(
         422: {"description": "Validation Error - Invalid request data"}
     }
 )
-
-def get_db():
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
 security = HTTPBearer()
 

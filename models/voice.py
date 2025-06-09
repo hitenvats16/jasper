@@ -15,4 +15,5 @@ class Voice(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
 
-    user = relationship("User", back_populates="voices") 
+    user = relationship("User", back_populates="voices")
+    processing_jobs = relationship("VoiceProcessingJob", back_populates="voice", cascade="all, delete-orphan") 

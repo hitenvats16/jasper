@@ -5,3 +5,6 @@
 **/*$py.class
 
 .temp
+
+postgresql:
+.DS_Store
