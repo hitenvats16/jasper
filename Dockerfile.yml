@@ -26,4 +26,4 @@ RUN mkdir -p .temp/postgres_data .temp/pgadmin_data .temp/rabbitmq_data
 EXPOSE 8000
 
 # Command to run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"] 
+CMD ["python", "-m", "main"]
