@@ -38,11 +38,5 @@ COPY . .
 # Set Python path to include the application root
 ENV PYTHONPATH=/app
 
-# Create necessary directories
-RUN mkdir -p .temp/postgres_data .temp/pgadmin_data .temp/rabbitmq_data
-
-# Expose port
-EXPOSE 8000
-
 # Command to run the application
 CMD ["python", "-m", "main"]
