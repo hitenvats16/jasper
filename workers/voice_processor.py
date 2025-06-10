@@ -1,12 +1,18 @@
 from .base import BaseWorker
 from sqlalchemy.orm import Session
 from db.session import SessionLocal
-from models.voice_job import VoiceProcessingJob, JobStatus
-from models.voice import Voice
+from models import VoiceProcessingJob, JobStatus, Voice
 from core.config import settings
 import logging
 from datetime import datetime
 import sys
+import io
+from utils.s3 import load_file_from_s3
+from openvoice.api import ToneColorConverter
+from openvoice import se_extractor
+import os
+import torch
+import shutil
 
 # Configure logging
 logging.basicConfig(
@@ -21,18 +27,55 @@ logger = logging.getLogger(__name__)
 
 class VoiceProcessor(BaseWorker):
     def __init__(self):
+        self.base_file_path = "temp_voices"
+        os.makedirs(self.base_file_path, exist_ok=True)
+
         logger.info(f"Initializing VoiceProcessor with queue: {settings.VOICE_PROCESSING_QUEUE}")
+        logger.info("Loading ToneColorConverter")
+
+        self.ckpt_converter = 'workers/checkpoints_v2/converter'
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        self.tone_color_converter = ToneColorConverter(f'{self.ckpt_converter}/config.json', device=self.device)
+        self.tone_color_converter.load_ckpt(f'{self.ckpt_converter}/checkpoint.pth')
+
         logger.info(f"RabbitMQ settings - Host: {settings.RABBITMQ_HOST}, Port: {settings.RABBITMQ_PORT}, VHost: {settings.RABBITMQ_VHOST}")
         super().__init__(settings.VOICE_PROCESSING_QUEUE)
+
+    def extract_tone_color(self,ref_speaker):
+        target_se, audio_name = se_extractor.get_se(ref_speaker, self.tone_color_converter, vad=True)
+        return target_se
 
     def generate_voice_tone(self, job_data: dict):
         """Generate a voice tone for a given job"""
         job_id = job_data.get("job_id")
-        s3_link = job_data.get("s3_link")
+        s3_key = job_data.get("s3_link")
         voice_id = job_data.get("voice_id")
 
-        print(f"Job ID: {job_id}, S3 Link: {s3_link}, Voice ID: {voice_id}")
-        
+        logger.info(f"Processing voice tone - Job ID: {job_id}, S3 Key: {s3_key}, Voice ID: {voice_id}")
+        buffer = io.BytesIO()
+        load_file_from_s3(s3_key, buffer=buffer)
+        buffer.seek(0)
+
+        audio_data = buffer.read()
+
+        # generating random file at /temp/{uuid} and temprorily saving audio there
+        temp_dir = os.path.join(self.base_file_path,f"job_{job_id}_voice_{voice_id}")
+        os.makedirs(temp_dir, exist_ok=True)
+        file_name = job_data.get("metadata").get("filename")
+        file_name = f"{job_id}_{voice_id}_{file_name}" 
+        temp_file_path = os.path.join(temp_dir, file_name)
+
+        with open(temp_file_path, "wb") as f:
+            f.write(audio_data)
+
+        print(f"Audio saved to {temp_file_path}")
+
+        # extracting tone color
+        target_se = self.extract_tone_color(temp_file_path)
+        print(f"Target SE tensor shape: {target_se.shape}")
+
+        # deleting temp file
+        shutil.rmtree(temp_dir)
 
     def process(self, job_data: dict):
         """Process a voice processing job"""
@@ -43,18 +86,23 @@ class VoiceProcessor(BaseWorker):
         if not job_id or not s3_link:
             logger.error(f"Invalid message format: {job_data}")
             return
-        
+
+        logger.info(f"Processing job {job_id} with data: {job_data}")
         db = SessionLocal()
+        job = None
+        
         try:
+            # Get the job
             job = db.query(VoiceProcessingJob).filter_by(id=job_id).first()
             if not job:
                 logger.error(f"Job {job_id} not found")
                 return
-            
+
             # Update job status to processing
             job.status = JobStatus.PROCESSING
             db.commit()
             
+            # Process the voice
             self.generate_voice_tone(job_data)
             
             # If this is a voice creation job, update the voice record
@@ -81,12 +129,16 @@ class VoiceProcessor(BaseWorker):
             db.commit()
             
             logger.info(f"Successfully processed job {job_id}")
+            
         except Exception as e:
             logger.error(f"Error processing job {job_id}: {str(e)}")
             if job:
-                job.status = JobStatus.FAILED
-                job.error = str(e)
-                db.commit()
+                try:
+                    job.status = JobStatus.FAILED
+                    job.error = str(e)
+                    db.commit()
+                except Exception as commit_error:
+                    logger.error(f"Failed to update job status: {str(commit_error)}")
         finally:
             db.close()
 

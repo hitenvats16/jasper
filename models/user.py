@@ -13,10 +13,11 @@ class User(Base):
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 
-    oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan")
-    voices = relationship("Voice", back_populates="user", cascade="all, delete-orphan")
-    credit = relationship("UserCredit", back_populates="user", uselist=False, cascade="all, delete-orphan")
-    voice_jobs = relationship("VoiceProcessingJob", back_populates="user", cascade="all, delete-orphan")
+    # Add relationships with string references to avoid circular imports
+    oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan", lazy="joined")
+    voices = relationship("Voice", back_populates="user", cascade="all, delete-orphan", lazy="joined")
+    credit = relationship("UserCredit", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
+    voice_jobs = relationship("VoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="joined")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_accounts"
@@ -29,4 +30,4 @@ class OAuthAccount(Base):
     refresh_token = Column(String, nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
 
-    user = relationship("User", back_populates="oauth_accounts") 
+    user = relationship("User", back_populates="oauth_accounts", lazy="joined") 

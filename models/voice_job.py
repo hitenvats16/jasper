@@ -25,6 +25,6 @@ class VoiceProcessingJob(Base):
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     voice_id = Column(Integer, ForeignKey("voices.id"), nullable=True)  # Optional since not all jobs are for voice creation
     
-    # Add relationships
-    user = relationship("User", back_populates="voice_jobs")
-    voice = relationship("Voice", back_populates="processing_jobs") 
+    # Add relationships with string references to avoid circular imports
+    user = relationship("User", back_populates="voice_jobs", lazy="joined", foreign_keys=[user_id])
+    voice = relationship("Voice", back_populates="processing_jobs", lazy="joined", foreign_keys=[voice_id]) 

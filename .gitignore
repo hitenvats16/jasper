@@ -8,3 +8,7 @@
 
 postgresql:
 .DS_Store
+
+processed
+temp_voices
+workers/checkpoints_v2

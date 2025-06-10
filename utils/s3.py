@@ -39,3 +39,17 @@ def delete_file_from_s3(s3_url: str, bucket=None):
     
     # Delete the object
     s3.delete_object(Bucket=bucket, Key=key) 
+
+
+def load_file_from_s3(s3_key: str, buffer = None, bucket=None):
+    """Load a file from S3 using its key into a buffer"""
+    s3 = boto3.client(
+        "s3",
+        endpoint_url=settings.AWS_ENDPOINT,
+        aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
+        aws_secret_access_key=settings.AWS_SECRET_ACCESS_KEY,
+        region_name=settings.AWS_REGION,
+    )
+    bucket = bucket or settings.AWS_S3_BUCKET
+    print(f"Loading file from S3: {s3_key}")
+    return s3.download_fileobj(bucket, s3_key, buffer)
