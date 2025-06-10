@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from schemas.credit import AddCreditRequest, UserCreditRead, CreditTransactionRead
 from services.credit_service import CreditService
-from utils.auth import get_current_user
 from models.user import User
 from typing import List
 from db.session import get_db
+from core.dependencies import get_current_user
 
 router = APIRouter(prefix="/credits", tags=["Credits"])
 

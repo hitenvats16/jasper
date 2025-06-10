@@ -11,6 +11,7 @@ from urllib.parse import urlencode
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from models.user import User
 from datetime import datetime, timedelta, timezone
+from core.dependencies import get_current_user
 
 router = APIRouter(
     prefix="/auth",
@@ -24,20 +25,6 @@ router = APIRouter(
 )
 
 security = HTTPBearer()
-
-def get_current_user(db: Session = Depends(get_db), credentials: HTTPAuthorizationCredentials = Security(security)):
-    """
-    Dependency to get the current authenticated user from the JWT token.
-    Raises 401 if token is invalid or expired, 404 if user not found.
-    """
-    token = credentials.credentials
-    payload = decode_access_token(token)
-    if not payload:
-        raise HTTPException(status_code=401, detail="Invalid or expired token")
-    user = db.query(User).filter_by(id=payload["user_id"]).first()
-    if not user:
-        raise HTTPException(status_code=404, detail="User not found")
-    return user
 
 @router.post(
     "/register",

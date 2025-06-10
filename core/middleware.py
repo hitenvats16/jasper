@@ -8,8 +8,8 @@ from functools import wraps
 
 security = HTTPBearer()
 
-def get_current_user(request: Request) -> Optional[User]:
-    """Get the current user from the request"""
+def get_current_user_from_request(request: Request) -> Optional[User]:
+    """Get the current user from the request for middleware purposes"""
     try:
         auth_header = request.headers.get("Authorization")
         if not auth_header or not auth_header.startswith("Bearer "):
@@ -47,7 +47,7 @@ def require_auth():
                     detail="Request object not found"
                 )
             
-            user = get_current_user(request)
+            user = get_current_user_from_request(request)
             if not user:
                 raise HTTPException(
                     status_code=status.HTTP_401_UNAUTHORIZED,

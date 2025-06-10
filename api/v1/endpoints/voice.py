@@ -1,6 +1,5 @@
 from fastapi import APIRouter, status, Depends, File, UploadFile, Form, HTTPException, Request, Query
 from sqlalchemy.orm import Session
-from db.session import SessionLocal
 from schemas.voice_job import VoiceProcessingJobCreate, VoiceProcessingJobRead
 from schemas.voice import VoiceCreate, VoiceUpdate, VoiceRead, VoiceList
 from models.voice_job import VoiceProcessingJob, JobStatus
