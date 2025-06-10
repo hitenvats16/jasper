@@ -14,7 +14,7 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 1 week
     
     # Database settings with default value
-    SQLALCHEMY_DATABASE_URL: str = "postgresql://postgres:c!kAYnY+.N%X4BV@db.vvyqwvijsuccxvojojnp.supabase.co:5432/postgres"
+    SQLALCHEMY_DATABASE_URL: str 
     
     # Optional settings with defaults
     SMTP_HOST: Optional[str] = None
