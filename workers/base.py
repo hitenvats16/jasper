@@ -25,6 +25,8 @@ class BaseWorker(ABC):
     def connect(self):
         """Establish connection to RabbitMQ"""
         try:
+            logger.info(f"Connecting to RabbitMQ: {settings.RABBITMQ_HOST}:{settings.RABBITMQ_PORT}/{settings.RABBITMQ_VHOST}")
+            logger.info(f"User: {settings.RABBITMQ_USER}, Password: {settings.RABBITMQ_PASSWORD}")
             credentials = pika.PlainCredentials(
                 settings.RABBITMQ_USER,
                 settings.RABBITMQ_PASSWORD
