@@ -2,6 +2,8 @@ from .base import BaseWorker
 from sqlalchemy.orm import Session
 from db.session import SessionLocal
 from models import VoiceProcessingJob, JobStatus, Voice
+from models.voice_embedding import VoiceEmbedding
+from services.qdrant_service import QdrantService
 from core.config import settings
 import logging
 from datetime import datetime
@@ -13,6 +15,7 @@ from openvoice import se_extractor
 import os
 import torch
 import shutil
+from .setup_checkpoints import setup_checkpoints
 
 # Configure logging
 logging.basicConfig(
@@ -31,17 +34,29 @@ class VoiceProcessor(BaseWorker):
         os.makedirs(self.base_file_path, exist_ok=True)
 
         logger.info(f"Initializing VoiceProcessor with queue: {settings.VOICE_PROCESSING_QUEUE}")
+        
+        # Setup checkpoints
+        logger.info("Setting up checkpoints")
+        if not setup_checkpoints():
+            raise RuntimeError("Failed to setup checkpoints")
+        
         logger.info("Loading ToneColorConverter")
-
-        self.ckpt_converter = 'workers/checkpoints_v2/converter'
+        self.ckpt_converter = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints", "checkpoints_v2/converter")
         self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         self.tone_color_converter = ToneColorConverter(f'{self.ckpt_converter}/config.json', device=self.device)
         self.tone_color_converter.load_ckpt(f'{self.ckpt_converter}/checkpoint.pth')
 
-        logger.info(f"RabbitMQ settings - Host: {settings.RABBITMQ_HOST}, Port: {settings.RABBITMQ_PORT}, VHost: {settings.RABBITMQ_VHOST}")
+        logger.info("Tone Color Converter loaded")
+        logger.info(f"Device: {self.device}")
+
+        logger.info("Initializing Qdrant service")
+        # Initialize Qdrant service
+        self.qdrant_service = QdrantService()
+        logger.info("Qdrant service initialized")
+        
         super().__init__(settings.VOICE_PROCESSING_QUEUE)
 
-    def extract_tone_color(self,ref_speaker):
+    def extract_tone_color(self, ref_speaker):
         target_se, audio_name = se_extractor.get_se(ref_speaker, self.tone_color_converter, vad=True)
         return target_se
 
@@ -50,6 +65,7 @@ class VoiceProcessor(BaseWorker):
         job_id = job_data.get("job_id")
         s3_key = job_data.get("s3_link")
         voice_id = job_data.get("voice_id")
+        metadata = job_data.get("metadata", {})
 
         logger.info(f"Processing voice tone - Job ID: {job_id}, S3 Key: {s3_key}, Voice ID: {voice_id}")
         buffer = io.BytesIO()
@@ -58,21 +74,34 @@ class VoiceProcessor(BaseWorker):
 
         audio_data = buffer.read()
 
-        # generating random file at /temp/{uuid} and temprorily saving audio there
-        temp_dir = os.path.join(self.base_file_path,f"job_{job_id}_voice_{voice_id}")
+        # generating random file at /temp/{uuid} and temporarily saving audio there
+        temp_dir = os.path.join(self.base_file_path, f"job_{job_id}_voice_{voice_id}")
         os.makedirs(temp_dir, exist_ok=True)
-        file_name = job_data.get("metadata").get("filename")
+        file_name = metadata.get("filename")
         file_name = f"{job_id}_{voice_id}_{file_name}" 
         temp_file_path = os.path.join(temp_dir, file_name)
 
         with open(temp_file_path, "wb") as f:
             f.write(audio_data)
 
-        print(f"Audio saved to {temp_file_path}")
+        logger.info(f"Audio saved to {temp_file_path}")
 
         # extracting tone color
         target_se = self.extract_tone_color(temp_file_path)
-        print(f"Target SE tensor shape: {target_se.shape}")
+        logger.info(f"Target SE tensor shape: {target_se.shape}")
+
+        # Store embedding in Qdrant
+        embedding = VoiceEmbedding.from_tensor(
+            job_id=job_id,
+            voice_id=voice_id,
+            target_se=target_se,
+            metadata={
+                **metadata,
+                "processed_at": datetime.utcnow().isoformat(),
+                "tensor_shape": list(target_se.shape)
+            }
+        )
+        self.qdrant_service.store_embedding(embedding)
 
         # deleting temp file
         shutil.rmtree(temp_dir)

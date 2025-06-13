@@ -24,3 +24,6 @@ psycopg2-binary
 requests
 melo
 git+https://github.com/myshell-ai/OpenVoice.git
+qdrant-client
+zipfile36
+tqdm

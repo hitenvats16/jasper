@@ -11,4 +11,4 @@ postgresql:
 
 processed
 temp_voices
-workers/checkpoints_v2
+workers/checkpoints

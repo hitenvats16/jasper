@@ -39,6 +39,13 @@ class Settings(BaseSettings):
     RABBITMQ_PASSWORD: str = "password"
     RABBITMQ_VHOST: str = "/"
     VOICE_PROCESSING_QUEUE: str = "voice_processing"
+    
+    # Qdrant settings
+    QDRANT_URL: str
+    QDRANT_API_KEY: Optional[str] 
+
+    # Checkpoints settings
+    CHECKPOINTS_URL: str = "https://pub-ac88a2c53a93464980d73555cf36e296.r2.dev/voice_processing/checkpoints_v2_0417.zip"
 
     @validator("SQLALCHEMY_DATABASE_URL", pre=True)
     def validate_database_url(cls, v):
