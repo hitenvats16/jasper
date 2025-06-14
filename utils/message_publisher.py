@@ -15,21 +15,7 @@ class MessagePublisher:
         """Create and return a RabbitMQ connection"""
         try:
             if not self.connection or self.connection.is_closed:
-                credentials = pika.PlainCredentials(
-                    settings.RABBITMQ_USER,
-                    settings.RABBITMQ_PASSWORD
-                )
-                parameters = pika.ConnectionParameters(
-                    host=settings.RABBITMQ_HOST,
-                    port=settings.RABBITMQ_PORT,
-                    virtual_host=settings.RABBITMQ_VHOST,
-                    credentials=credentials,
-                    heartbeat=600,
-                    blocked_connection_timeout=300,
-                    socket_timeout=5,  # Add socket timeout
-                    connection_attempts=3  # Limit connection attempts
-                )
-                self.connection = pika.BlockingConnection(parameters)
+                self.connection = get_rabbitmq_connection()
                 self.channel = self.connection.channel()
                 self.channel.queue_declare(queue=settings.VOICE_PROCESSING_QUEUE, durable=True)
                 logger.info("Successfully connected to RabbitMQ")
@@ -65,21 +51,12 @@ class MessagePublisher:
 message_publisher = MessagePublisher()
 
 def get_rabbitmq_connection():
-    """Create and return a RabbitMQ connection"""
+    """Create and return a RabbitMQ connection using connection URL"""
     try:
-        credentials = pika.PlainCredentials(
-            settings.RABBITMQ_USER,
-            settings.RABBITMQ_PASSWORD
-        )
-        parameters = pika.ConnectionParameters(
-            host=settings.RABBITMQ_HOST,
-            port=settings.RABBITMQ_PORT,
-            virtual_host=settings.RABBITMQ_VHOST,
-            credentials=credentials,
-            heartbeat=600,
-            blocked_connection_timeout=300,
-            socket_timeout=5,  # Add socket timeout
-            connection_attempts=3  # Limit connection attempts
+        # Example URL format: amqp://username:password@hostname:port/vhost
+        connection_url = settings.RABBITMQ_URL
+        parameters = pika.URLParameters(
+            url=connection_url,
         )
         return pika.BlockingConnection(parameters)
     except Exception as e:

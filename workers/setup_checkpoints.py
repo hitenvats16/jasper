@@ -49,6 +49,11 @@ def setup_checkpoints():
     and clean up the zip file.
     """
     checkpoints_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "checkpoints")
+
+    if os.path.exists(os.path.join(checkpoints_dir, "checkpoints_v2")):
+        logger.info("Checkpoints already exist, skipping download")
+        return True
+
     zip_path = os.path.join(checkpoints_dir, "checkpoints.zip")
     extract_dir = os.path.join(checkpoints_dir)
 

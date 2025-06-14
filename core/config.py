@@ -33,11 +33,8 @@ class Settings(BaseSettings):
     AWS_ENDPOINT: Optional[str] = None  # Changed from AWS_S3_ENDPOINT to AWS_ENDPOINT
     
     # RabbitMQ settings
-    RABBITMQ_HOST: str = "localhost"
-    RABBITMQ_PORT: int = 5672
-    RABBITMQ_USER: str = "user"
-    RABBITMQ_PASSWORD: str = "password"
-    RABBITMQ_VHOST: str = "/"
+    RABBITMQ_URL: str
+    RABBITMQ_VHOST: str = ""
     VOICE_PROCESSING_QUEUE: str = "voice_processing"
     
     # Qdrant settings

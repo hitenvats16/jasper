@@ -25,19 +25,9 @@ class BaseWorker(ABC):
     def connect(self):
         """Establish connection to RabbitMQ"""
         try:
-            logger.info(f"Connecting to RabbitMQ: {settings.RABBITMQ_HOST}:{settings.RABBITMQ_PORT}/{settings.RABBITMQ_VHOST}")
-            logger.info(f"User: {settings.RABBITMQ_USER}, Password: {settings.RABBITMQ_PASSWORD}")
-            credentials = pika.PlainCredentials(
-                settings.RABBITMQ_USER,
-                settings.RABBITMQ_PASSWORD
-            )
-            parameters = pika.ConnectionParameters(
-                host=settings.RABBITMQ_HOST,
-                port=settings.RABBITMQ_PORT,
-                virtual_host=settings.RABBITMQ_VHOST,
-                credentials=credentials,
-                heartbeat=600,
-                blocked_connection_timeout=300
+            connection_url = settings.RABBITMQ_URL
+            parameters = pika.URLParameters(
+                url=connection_url
             )
             self.connection = pika.BlockingConnection(parameters)
             self.channel = self.connection.channel()
