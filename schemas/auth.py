@@ -5,7 +5,7 @@ from typing import Union
 class Token(BaseModel):
     access_token: str
     token_type: str
-    expires_in: datetime
+    expires_in: int
 
 class TokenData(BaseModel):
     email: Union[str, None] = None
