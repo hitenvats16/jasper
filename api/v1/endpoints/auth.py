@@ -227,8 +227,7 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
     user = get_or_create_user_by_google_oauth(db, code, settings.GOOGLE_REDIRECT_URI)
     expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token({"user_id": user.id, "email": user.email}, expires_delta=expires_delta)
-    expires_at = datetime.now(timezone.utc) + expires_delta
-    return {"access_token": access_token, "token_type": "bearer", "expires_at": expires_at}
+    return {"access_token": access_token, "token_type": "bearer", "expires_in": expires_delta.total_seconds()}
 
 @router.get(
     "/me",
