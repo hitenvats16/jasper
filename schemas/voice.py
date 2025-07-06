@@ -8,6 +8,7 @@ class VoiceBase(BaseModel):
     description: Optional[str] = None
     voice_metadata: Optional[Dict[str, Any]] = None
     is_deleted: bool = False
+    is_default: bool = False
 
 class VoiceCreate(VoiceBase):
     pass
