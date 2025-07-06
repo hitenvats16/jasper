@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Enum, func
+from sqlalchemy import Column, Integer, Float, String, DateTime, ForeignKey, Enum, func, Boolean
 from sqlalchemy.orm import relationship
 from db.session import Base
 import enum
@@ -13,6 +13,7 @@ class UserCredit(Base):
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
     balance = Column(Float, default=0.0, nullable=False)
+    is_deleted = Column(Boolean, default=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
 
     user = relationship("User", back_populates="credit")
@@ -25,6 +26,7 @@ class CreditTransaction(Base):
     type = Column(Enum(TransactionType), nullable=False)
     amount = Column(Float, nullable=False)
     description = Column(String, nullable=True)
+    is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     user_credit = relationship("UserCredit", back_populates="transactions") 

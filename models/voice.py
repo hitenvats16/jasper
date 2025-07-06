@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, func
+from sqlalchemy import Column, Integer, String, DateTime, JSON, ForeignKey, func, Boolean
 from sqlalchemy.orm import relationship
 from db.session import Base
 from datetime import datetime
@@ -12,8 +12,9 @@ class Voice(Base):
     voice_metadata = Column(JSON, nullable=True)
     s3_link = Column(String, nullable=False)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, onupdate=datetime.utcnow)
 
     user = relationship("User", back_populates="voices")
-    processing_jobs = relationship("VoiceProcessingJob", back_populates="voice", cascade="all, delete-orphan") 
+    processing_jobs = relationship("VoiceProcessingJob", back_populates="voice", cascade="all, delete-orphan")

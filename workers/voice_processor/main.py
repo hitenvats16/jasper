@@ -1,4 +1,4 @@
-from .base import BaseWorker
+from ..base import BaseWorker
 from sqlalchemy.orm import Session
 from db.session import SessionLocal
 from models import VoiceProcessingJob, JobStatus, Voice
@@ -94,12 +94,7 @@ class VoiceProcessor(BaseWorker):
         embedding = VoiceEmbedding.from_tensor(
             job_id=job_id,
             voice_id=voice_id,
-            target_se=target_se,
-            metadata={
-                **metadata,
-                "processed_at": datetime.utcnow().isoformat(),
-                "tensor_shape": list(target_se.shape)
-            }
+            target_se=target_se
         )
         self.qdrant_service.store_embedding(embedding)
 
@@ -122,7 +117,7 @@ class VoiceProcessor(BaseWorker):
         
         try:
             # Get the job
-            job = db.query(VoiceProcessingJob).filter_by(id=job_id).first()
+            job = db.query(VoiceProcessingJob).filter_by(id=job_id, is_deleted=False).first()
             if not job:
                 logger.error(f"Job {job_id} not found")
                 return
@@ -136,7 +131,7 @@ class VoiceProcessor(BaseWorker):
             
             # If this is a voice creation job, update the voice record
             if voice_id:
-                voice = db.query(Voice).filter_by(id=voice_id).first()
+                voice = db.query(Voice).filter_by(id=voice_id, is_deleted=False).first()
                 if voice:
                     # Update voice with processing results
                     current_metadata = voice.voice_metadata or {}

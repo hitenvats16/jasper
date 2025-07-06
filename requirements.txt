@@ -27,3 +27,5 @@ git+https://github.com/myshell-ai/OpenVoice.git
 qdrant-client
 zipfile36
 tqdm
+PyPDF2
+pdfplumber

@@ -7,12 +7,15 @@ class VoiceBase(BaseModel):
     name: str
     description: Optional[str] = None
     voice_metadata: Optional[Dict[str, Any]] = None
+    is_deleted: bool = False
 
 class VoiceCreate(VoiceBase):
     pass
 
 class VoiceUpdate(VoiceBase):
     name: Optional[str] = None
+    description: Optional[str] = None
+    is_deleted: Optional[bool] = None
 
 class VoiceRead(VoiceBase):
     id: int

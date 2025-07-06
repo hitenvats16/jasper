@@ -9,4 +9,5 @@ class Rate(Base):
     flags = Column(JSON, nullable=True)  # e.g. {"premium": true, "discount": false}
     rate = Column(Float, nullable=False)  # price per unit (e.g. per minute, per job, etc)
     currency = Column(String, default="USD", nullable=False)
-    description = Column(String, nullable=True) 
+    description = Column(String, nullable=True)
+    is_deleted = Column(Boolean, default=False) 

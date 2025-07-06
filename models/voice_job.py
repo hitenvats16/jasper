@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum, func, ForeignKey
+from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum, func, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from db.session import Base
 import enum
@@ -18,6 +18,7 @@ class VoiceProcessingJob(Base):
     status = Column(Enum(JobStatus), default=JobStatus.QUEUED, nullable=False)
     result = Column(JSON, nullable=True)
     error = Column(Text, nullable=True)
+    is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

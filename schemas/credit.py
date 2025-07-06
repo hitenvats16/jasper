@@ -8,6 +8,7 @@ class CreditTransactionRead(BaseModel):
     type: TransactionType
     amount: float
     description: Optional[str]
+    is_deleted: bool = False
     created_at: datetime
 
     class Config:
@@ -15,6 +16,7 @@ class CreditTransactionRead(BaseModel):
 
 class UserCreditRead(BaseModel):
     balance: float
+    is_deleted: bool = False
     updated_at: datetime
     transactions: Optional[List[CreditTransactionRead]] = None
 

@@ -8,6 +8,7 @@ class RateBase(BaseModel):
     rate: float
     currency: str = "USD"
     description: Optional[str] = None
+    is_deleted: bool = False
 
 class RateCreate(RateBase):
     pass

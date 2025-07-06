@@ -12,6 +12,7 @@ class UserBase(BaseModel):
     email: EmailStr
     is_active: bool = True
     is_verified: bool = False
+    is_deleted: bool = False
 
 class UserCreate(UserBase):
     password: str
@@ -27,4 +28,5 @@ class UserRead(UserBase):
 
 class UserUpdate(BaseModel):
     is_active: Optional[bool]
-    is_verified: Optional[bool] 
+    is_verified: Optional[bool]
+    is_deleted: Optional[bool] 

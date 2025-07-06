@@ -1,7 +1,7 @@
 from fastapi import APIRouter, status, Depends, File, UploadFile, Form, HTTPException, Request, Query
 from sqlalchemy.orm import Session
-from schemas.voice_job import VoiceProcessingJobCreate, VoiceProcessingJobRead
-from schemas.voice import VoiceCreate, VoiceUpdate, VoiceRead, VoiceList
+from schemas.voice_job import VoiceProcessingJobRead
+from schemas.voice import VoiceUpdate, VoiceRead, VoiceList
 from models.voice_job import VoiceProcessingJob, JobStatus
 from models.voice import Voice
 from utils.s3 import upload_file_to_s3, delete_file_from_s3
@@ -27,50 +27,6 @@ router = APIRouter(
         422: {"description": "Validation Error - Invalid request data"}
     }
 )
-
-@router.get(
-    "/jobs/{job_id}",
-    response_model=VoiceProcessingJobRead,
-    status_code=status.HTTP_200_OK,
-    summary="Get job status",
-    description="""
-    Retrieve the status and results of a voice processing job.
-    
-    - Returns current job status
-    - Includes processing results if completed
-    - Shows error message if failed
-    
-    **Note:** Job status can be: QUEUED, PROCESSING, COMPLETED, or FAILED
-    """,
-    responses={
-        200: {"description": "Successfully retrieved job status"},
-        404: {"description": "Job not found"}
-    },
-    tags=["Voice Management"]
-)
-def get_voice_job(
-    job_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
-):
-    """
-    Get the status and results of a voice processing job.
-    
-    Args:
-        job_id: ID of the job to retrieve
-        db: Database session
-        current_user: Current authenticated user
-    
-    Returns:
-        VoiceProcessingJobRead: Job status and results
-        
-    Raises:
-        HTTPException: If job is not found or user doesn't have access
-    """
-    job = db.query(VoiceProcessingJob).filter_by(id=job_id, user_id=current_user.id).first()
-    if not job:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
 
 @router.get(
     "/jobs",
@@ -112,11 +68,11 @@ def list_voice_jobs(
     Returns:
         List[VoiceProcessingJobRead]: List of voice processing jobs
     """
-    query = db.query(VoiceProcessingJob).filter(VoiceProcessingJob.user_id == current_user.id)
+    query = db.query(VoiceProcessingJob).filter(VoiceProcessingJob.user_id == current_user.id, VoiceProcessingJob.is_deleted == False)
     
     if voice_id:
         # Verify voice ownership
-        voice = db.query(Voice).filter_by(id=voice_id, user_id=current_user.id).first()
+        voice = db.query(Voice).filter_by(id=voice_id, user_id=current_user.id, is_deleted=False).first()
         if not voice:
             raise HTTPException(status_code=404, detail="Voice not found")
         query = query.filter(VoiceProcessingJob.voice_id == voice_id)
@@ -162,8 +118,8 @@ def list_voices(
     Returns:
         VoiceList: Paginated list of voices with total count
     """
-    total = db.query(func.count(Voice.id)).filter(Voice.user_id == current_user.id).scalar()
-    voices = db.query(Voice).filter(Voice.user_id == current_user.id).offset(skip).limit(limit).all()
+    total = db.query(func.count(Voice.id)).filter(Voice.user_id == current_user.id, Voice.is_deleted == False).scalar()
+    voices = db.query(Voice).filter(Voice.user_id == current_user.id, Voice.is_deleted == False).offset(skip).limit(limit).all()
     return {"items": voices, "total": total}
 
 @router.post(
@@ -314,7 +270,7 @@ def get_voice(
     Raises:
         HTTPException: If voice is not found or not owned by user
     """
-    voice = db.query(Voice).filter(Voice.id == voice_id, Voice.user_id == current_user.id).first()
+    voice = db.query(Voice).filter(Voice.id == voice_id, Voice.user_id == current_user.id, Voice.is_deleted == False).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
     return voice
@@ -361,7 +317,7 @@ def update_voice(
     Raises:
         HTTPException: If voice is not found or not owned by user
     """
-    voice = db.query(Voice).filter(Voice.id == voice_id, Voice.user_id == current_user.id).first()
+    voice = db.query(Voice).filter(Voice.id == voice_id, Voice.user_id == current_user.id, Voice.is_deleted == False).first()
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
     
@@ -371,60 +327,3 @@ def update_voice(
     db.commit()
     db.refresh(voice)
     return voice
-
-@router.delete(
-    "/{voice_id}",
-    status_code=status.HTTP_204_NO_CONTENT,
-    summary="Delete voice",
-    description="""
-    Delete a voice and its associated file.
-    
-    - Removes voice record from database
-    - Deletes associated file from S3
-    - Verifies user ownership
-    
-    **Note:** 
-    - Operation is irreversible
-    - Only accessible by the voice owner
-    - S3 deletion errors are logged but don't prevent database deletion
-    """,
-    responses={
-        204: {"description": "Voice successfully deleted"},
-        401: {"description": "Unauthorized - Invalid or expired token"},
-        404: {"description": "Voice not found"}
-    },
-    tags=["Voice Management"]
-)
-def delete_voice(
-    voice_id: int,
-    db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user),
-):
-    """
-    Delete a voice and its associated file.
-    
-    Args:
-        voice_id: ID of the voice to delete
-        db: Database session
-        current_user: Current authenticated user
-    
-    Returns:
-        None
-        
-    Raises:
-        HTTPException: If voice is not found or not owned by user
-    """
-    voice = db.query(Voice).filter_by(id=voice_id, user_id=current_user.id).first()
-    if not voice:
-        raise HTTPException(status_code=404, detail="Voice not found")
-    
-    # Delete from S3
-    try:
-        delete_file_from_s3(voice.s3_link)
-    except Exception as e:
-        logger.error(f"Error deleting file from S3: {str(e)}")
-    
-    # Delete from database
-    db.delete(voice)
-    db.commit()
-    return None 
