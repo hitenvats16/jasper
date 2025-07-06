@@ -5,6 +5,7 @@ from schemas.voice import VoiceUpdate, VoiceRead, VoiceList
 from models.voice_job import VoiceProcessingJob, JobStatus
 from models.voice import Voice
 from utils.s3 import upload_file_to_s3, delete_file_from_s3
+from services.voice_service import VoiceService
 import json
 from models.user import User
 from typing import Optional, List
@@ -118,8 +119,7 @@ def list_voices(
     Returns:
         VoiceList: Paginated list of voices with total count
     """
-    total = db.query(func.count(Voice.id)).filter(Voice.user_id == current_user.id, Voice.is_deleted == False).scalar()
-    voices = db.query(Voice).filter(Voice.user_id == current_user.id, Voice.is_deleted == False).offset(skip).limit(limit).all()
+    voices, total = VoiceService.get_user_voices(db, current_user.id, skip, limit)
     return {"items": voices, "total": total}
 
 @router.post(
@@ -178,55 +178,38 @@ async def create_voice(
         raise HTTPException(status_code=400, detail="Invalid metadata JSON")
 
     # Upload file to S3
-    s3_link = upload_file_to_s3(file.file, file.filename, file.content_type)
+    s3_key = upload_file_to_s3(file.file, file.filename, file.content_type)
 
     # Create voice record
     voice = Voice(
         name=name,
         description=description,
         voice_metadata=meta_dict,
-        s3_link=s3_link,
+        s3_key=s3_key,
         user_id=current_user.id
     )
     db.add(voice)
     db.commit()
     db.refresh(voice)
 
-    print("created voice",voice)
+    logger.info(f"Created voice {voice.id} for user {current_user.id}")
 
-    # Create processing job
-    job = VoiceProcessingJob(
-        s3_link=s3_link,
-        status=JobStatus.QUEUED,
+    # Create processing job using VoiceService
+    job = VoiceService.create_voice_processing_job(
+        db=db,
+        s3_key=s3_key,
         user_id=current_user.id,
         voice_id=voice.id,
-        meta_data={
+        metadata={
             "filename": file.filename,
             "name": name,
             "description": description,
             "metadata": meta_dict
         }
     )
-    db.add(job)
-    db.commit()
-    db.refresh(job)
-
-    print("created job",job)
     
-    # Publish message to queue
-    message = {
-        "job_id": job.id,
-        "s3_link": s3_link,
-        "user_id": current_user.id,
-        "voice_id": voice.id,
-        "metadata": {
-            "filename": file.filename,
-            "name": name,
-            "description": description,
-            "metadata": meta_dict
-        }
-    }
-    message_publisher.publish(settings.VOICE_PROCESSING_QUEUE, message)
+    db.commit()
+    logger.info(f"Created voice processing job {job.id} for voice {voice.id}")
     
     return voice
 
@@ -270,7 +253,7 @@ def get_voice(
     Raises:
         HTTPException: If voice is not found or not owned by user
     """
-    voice = db.query(Voice).filter(Voice.id == voice_id, Voice.user_id == current_user.id, Voice.is_deleted == False).first()
+    voice = VoiceService.get_voice_by_id(db, voice_id, current_user.id)
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
     return voice
@@ -317,7 +300,7 @@ def update_voice(
     Raises:
         HTTPException: If voice is not found or not owned by user
     """
-    voice = db.query(Voice).filter(Voice.id == voice_id, Voice.user_id == current_user.id, Voice.is_deleted == False).first()
+    voice = VoiceService.get_voice_by_id(db, voice_id, current_user.id)
     if not voice:
         raise HTTPException(status_code=404, detail="Voice not found")
     

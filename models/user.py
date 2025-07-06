@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from db.session import Base
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__ = "user"
 
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
@@ -13,6 +13,10 @@ class User(Base):
     is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    is_admin = Column(Boolean, default=False)
+    profile_picture = Column(String, nullable=True)
+    first_name = Column(String, nullable=True)
+    last_name = Column(String, nullable=True)
 
     # Add relationships with string references to avoid circular imports
     oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan", lazy="joined")
@@ -21,10 +25,10 @@ class User(Base):
     voice_jobs = relationship("VoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="joined")
 
 class OAuthAccount(Base):
-    __tablename__ = "oauth_accounts"
+    __tablename__ = "oauth_account"
 
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
     provider = Column(String, nullable=False)  # e.g., 'google', 'facebook'
     provider_user_id = Column(String, nullable=False)  # The unique ID from the provider
     access_token = Column(String, nullable=True)

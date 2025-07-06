@@ -40,10 +40,10 @@ class TextParserAndExtractor(BaseWorker):
     def process(self, job_data: dict):
         """Process a text parsing and extraction job"""
         job_id = job_data.get("job_id")
-        s3_link = job_data.get("s3_link")
+        s3_key = job_data.get("s3_key")
         file_type = job_data.get("file_type")
         
-        if not job_id or not s3_link or not file_type:
+        if not job_id or not s3_key or not file_type:
             logger.error(f"Invalid message format: {job_data}")
             return
 

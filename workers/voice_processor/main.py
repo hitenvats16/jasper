@@ -63,7 +63,7 @@ class VoiceProcessor(BaseWorker):
     def generate_voice_tone(self, job_data: dict):
         """Generate a voice tone for a given job"""
         job_id = job_data.get("job_id")
-        s3_key = job_data.get("s3_link")
+        s3_key = job_data.get("s3_key")
         voice_id = job_data.get("voice_id")
         metadata = job_data.get("metadata", {})
 
@@ -104,10 +104,10 @@ class VoiceProcessor(BaseWorker):
     def process(self, job_data: dict):
         """Process a voice processing job"""
         job_id = job_data.get("job_id")
-        s3_link = job_data.get("s3_link")
+        s3_key = job_data.get("s3_key")
         voice_id = job_data.get("voice_id")  # Optional, only present for create jobs
         
-        if not job_id or not s3_link:
+        if not job_id or not s3_key:
             logger.error(f"Invalid message format: {job_data}")
             return
 

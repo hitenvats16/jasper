@@ -19,7 +19,8 @@ class VoiceUpdate(VoiceBase):
 
 class VoiceRead(VoiceBase):
     id: int
-    s3_link: str
+    s3_key: str
+    s3_public_link: HttpUrl
     user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None

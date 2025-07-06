@@ -5,9 +5,13 @@ from core.security import hash_password, verify_password
 from typing import Optional
 from utils.email import send_email_async
 from core.config import settings
+from services.voice_service import VoiceService
 import random, string
 import httpx
 from datetime import datetime, timezone, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 # In-memory store for verification codes (for demo; use Redis in prod)
 verification_codes = {}
@@ -21,6 +25,15 @@ def register_user(db: Session, user_in: UserCreate):
     db.add(user)
     db.commit()
     db.refresh(user)
+    
+    # Seed default voices for the new user
+    try:
+        VoiceService.seed_default_voices_for_user(db, user.id)
+        logger.info(f"Successfully seeded default voices for user {user.id}")
+    except Exception as e:
+        logger.error(f"Failed to seed default voices for user {user.id}: {str(e)}")
+        # Don't fail user registration if voice seeding fails
+    
     # Generate and send verification code
     code = ''.join(random.choices(string.digits, k=6))
     verification_codes[user.email] = code
@@ -86,14 +99,22 @@ def get_or_create_user_by_google_oauth(db: Session, code: str, redirect_uri: str
     google_id = userinfo["id"]
     email = userinfo["email"]
     verified = userinfo.get("verified_email", False)
-
+    print(userinfo)
     # Find or create user
     user = db.query(User).filter(User.email == email).first()
     if not user:
-        user = User(email=email, is_verified=verified, is_active=True)
+        user = User(email=email, is_verified=verified, is_active=True, first_name=userinfo.get("given_name"), last_name=userinfo.get("family_name"), profile_picture=userinfo.get("picture"))
         db.add(user)
         db.commit()
         db.refresh(user)
+        
+        # Seed default voices for the new OAuth user
+        try:
+            VoiceService.seed_default_voices_for_user(db, user.id)
+            logger.info(f"Successfully seeded default voices for OAuth user {user.id}")
+        except Exception as e:
+            logger.error(f"Failed to seed default voices for OAuth user {user.id}: {str(e)}")
+            # Don't fail OAuth user creation if voice seeding fails
     # Find or create OAuthAccount
     oauth = db.query(OAuthAccount).filter_by(user_id=user.id, provider="google").first()
     if not oauth:

@@ -9,9 +9,9 @@ class TransactionType(str, enum.Enum):
     USAGE = "usage"
 
 class UserCredit(Base):
-    __tablename__ = "user_credits"
+    __tablename__ = "user_credit"
     id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(Integer, ForeignKey("users.id"), unique=True, nullable=False)
+    user_id = Column(Integer, ForeignKey("user.id"), unique=True, nullable=False)
     balance = Column(Float, default=0.0, nullable=False)
     is_deleted = Column(Boolean, default=False)
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
@@ -20,9 +20,9 @@ class UserCredit(Base):
     transactions = relationship("CreditTransaction", back_populates="user_credit", cascade="all, delete-orphan")
 
 class CreditTransaction(Base):
-    __tablename__ = "credit_transactions"
+    __tablename__ = "credit_transaction"
     id = Column(Integer, primary_key=True, index=True)
-    user_credit_id = Column(Integer, ForeignKey("user_credits.id"), nullable=False)
+    user_credit_id = Column(Integer, ForeignKey("user_credit.id"), nullable=False)
     type = Column(Enum(TransactionType), nullable=False)
     amount = Column(Float, nullable=False)
     description = Column(String, nullable=True)

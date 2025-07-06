@@ -10,10 +10,10 @@ class JobStatus(str, enum.Enum):
     FAILED = "FAILED"
 
 class VoiceProcessingJob(Base):
-    __tablename__ = "voice_processing_jobs"
+    __tablename__ = "voice_processing_job"
 
     id = Column(Integer, primary_key=True, index=True)
-    s3_link = Column(String, nullable=False)
+    s3_key = Column(String, nullable=False)
     meta_data = Column(JSON, nullable=True)
     status = Column(Enum(JobStatus), default=JobStatus.QUEUED, nullable=False)
     result = Column(JSON, nullable=True)
@@ -23,8 +23,8 @@ class VoiceProcessingJob(Base):
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Add foreign keys
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    voice_id = Column(Integer, ForeignKey("voices.id"), nullable=True)  # Optional since not all jobs are for voice creation
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
+    voice_id = Column(Integer, ForeignKey("voice.id"), nullable=True)  # Optional since not all jobs are for voice creation
     
     # Add relationships with string references to avoid circular imports
     user = relationship("User", back_populates="voice_jobs", lazy="joined", foreign_keys=[user_id])

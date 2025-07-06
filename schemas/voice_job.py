@@ -8,7 +8,7 @@ class VoiceProcessingJobCreate(BaseModel):
 
 class VoiceProcessingJobRead(BaseModel):
     id: int
-    s3_link: str
+    s3_key: str
     meta_data: Optional[Dict[str, Any]]
     status: JobStatus
     result: Optional[Dict[str, Any]]

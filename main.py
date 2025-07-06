@@ -4,6 +4,7 @@ from db.session import engine, Base, init_db
 import os
 import uvicorn
 from api.v1.endpoints import voice
+from api.v1.endpoints import admin
 from fastapi.openapi.utils import get_openapi
 from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -152,6 +153,14 @@ def custom_openapi():
                 "description": "Voice Processing Guide",
                 "url": "https://docs.jasper.ai/voice"
             }
+        },
+        {
+            "name": "Admin",
+            "description": "Administrative endpoints for managing default voices and system settings",
+            "externalDocs": {
+                "description": "Admin Guide",
+                "url": "https://docs.jasper.ai/admin"
+            }
         }
     ]
     
@@ -210,6 +219,13 @@ app.include_router(
     rate_router,
     prefix="/api/v1",
     tags=["Rates"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
+
+app.include_router(
+    admin.router,
+    prefix="/api/v1",
+    tags=["Admin"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 

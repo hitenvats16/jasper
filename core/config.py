@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     AWS_REGION: Optional[str] = None
     AWS_S3_BUCKET: Optional[str] = None
     AWS_ENDPOINT: Optional[str] = None  # Changed from AWS_S3_ENDPOINT to AWS_ENDPOINT
+    AWS_PUBLIC_URL: Optional[str] = None
     
     # RabbitMQ settings
     RABBITMQ_URL: str

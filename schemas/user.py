@@ -22,6 +22,9 @@ class UserRead(UserBase):
     created_at: datetime
     updated_at: Optional[datetime] = None
     oauth_accounts: List[OAuthAccountRead] = []
+    profile_picture: Optional[str] = None
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
 
     class Config:
         from_attributes = True
