@@ -3,6 +3,7 @@ from models.voice_job import VoiceProcessingJob, JobStatus
 from models.voice import Voice
 from models.credit import UserCredit, CreditTransaction, TransactionType
 from models.default_voice import DefaultVoice
+from models.project import Project
 
 # This ensures all models are imported and available before relationships are set up
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     'CreditTransaction',
     'TransactionType',
     'DefaultVoice',
+    'Project',
 ] 
