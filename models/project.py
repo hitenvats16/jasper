@@ -28,3 +28,6 @@ class Project(Base):
 
     # Relationship with User
     user = relationship("User", back_populates="projects", lazy="joined")
+    
+    # Relationship with Books (optional - through association table)
+    books = relationship("Book", secondary="book_project_association", back_populates="projects", lazy="joined")

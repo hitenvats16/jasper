@@ -3,7 +3,7 @@ from core.config import settings
 from uuid import uuid4
 from urllib.parse import urlparse
 
-def upload_file_to_s3(file_obj, filename, content_type, bucket=None):
+def upload_file_to_s3(file_obj, filename, content_type, bucket=None, custom_key=None):
     s3 = boto3.client(
         "s3",
         endpoint_url=settings.AWS_ENDPOINT,
@@ -13,7 +13,12 @@ def upload_file_to_s3(file_obj, filename, content_type, bucket=None):
     )
     print("Uploading file to S3...")
     bucket = bucket or settings.AWS_S3_BUCKET
-    key = f"voice_samples/{uuid4()}_{filename}"
+    
+    if custom_key:
+        key = custom_key
+    else:
+        key = f"voice_samples/{uuid4()}_{filename}"
+    
     s3.upload_fileobj(
         file_obj,
         bucket,

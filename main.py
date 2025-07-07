@@ -11,7 +11,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
-from api.v1.endpoints import credit_router, rate_router, project_router
+from api.v1.endpoints import credit_router, rate_router, project_router, book_router
 from core.dependencies import get_optional_user
 from models.user import User
 import logging
@@ -169,6 +169,14 @@ def custom_openapi():
                 "description": "Project Management Guide",
                 "url": "https://docs.jasper.ai/projects"
             }
+        },
+        {
+            "name": "Books",
+            "description": "Book management endpoints for uploading and managing book files",
+            "externalDocs": {
+                "description": "Book Management Guide",
+                "url": "https://docs.jasper.ai/books"
+            }
         }
     ]
     
@@ -241,6 +249,13 @@ app.include_router(
     project_router,
     prefix="/api/v1",
     tags=["Projects"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
+
+app.include_router(
+    book_router,
+    prefix="/api/v1",
+    tags=["Books"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 
