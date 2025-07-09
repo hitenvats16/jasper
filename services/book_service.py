@@ -79,7 +79,7 @@ class BookService:
 
     @staticmethod
     def validate_file_type(filename: str) -> bool:
-        allowed_extensions = {'.pdf', '.epub'}
+        allowed_extensions = {'.pdf'}
         file_extension = os.path.splitext(filename.lower())[1]
         return file_extension in allowed_extensions
 

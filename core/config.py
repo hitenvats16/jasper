@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # Checkpoints settings
     CHECKPOINTS_URL: str = "https://pub-ac88a2c53a93464980d73555cf36e296.r2.dev/voice_processing/checkpoints_v2_0417.zip"
 
+    # Groq settings
+    GROQ_API_KEY: str
+
+    # Fal.AI settings
+    FAL_API_KEY: str
+
     @validator("SQLALCHEMY_DATABASE_URL", pre=True)
     def validate_database_url(cls, v):
         if not v:

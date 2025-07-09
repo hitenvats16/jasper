@@ -22,7 +22,7 @@ async def create_book(
 ):
     """
     Create a new book entry with file upload.
-    - **file**: Book file (PDF, EPUB) - max 20MB
+    - **file**: Book file (PDF) - max 20MB
     - **title**: Book title
     - **author**: Book author
     - **data**: Optional JSON data as string
@@ -37,7 +37,7 @@ async def create_book(
     if not BookService.validate_file_type(file.filename):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Invalid file type. Allowed: PDF, EPUB"
+            detail="Invalid file type. Allowed: PDF"
         )
     # Parse JSON data if provided
     json_data = None

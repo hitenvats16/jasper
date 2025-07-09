@@ -29,3 +29,8 @@ zipfile36
 tqdm
 PyPDF2
 pdfplumber
+fal-client
+groq
+langchain
+langchain-groq
+langchain-core

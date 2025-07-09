@@ -5,7 +5,6 @@ from enum import Enum
 class ContentType(str, Enum):
     HEADLINE = "headline"
     PARAGRAPH = "paragraph"
-    EMPTY = "empty"
     FALLBACK = "fallback"
     CHAPTER_TITLE = "chapter_title"
     
@@ -18,6 +17,8 @@ class Section(BaseModel):
     section_id: str = Field(description="Unique ID for the section.")
     content: str = Field(description="The extracted textual content of the section.")
     content_type: ContentType = Field(default=ContentType.PARAGRAPH, description="Type of content in the book section.")
+    page_number: Optional[int] = Field(None, description="Page number where this section was found.")
+    raw_text: Optional[str] = Field(None, description="Raw text from the page before processing.")
     level: Optional[int] = Field(
         None, description="Heading level if content_type is 'headline'."
     )
