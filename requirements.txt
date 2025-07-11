@@ -34,3 +34,4 @@ groq
 langchain
 langchain-groq
 langchain-core
+fitz
