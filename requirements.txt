@@ -1,13 +1,9 @@
-# This file may be used to create an environment using:
-# $ conda create --name <env> --file <this file>
-# platform: osx-arm64
-# created-by: conda 24.9.2
 fastapi
 sqlalchemy
 pydantic
 pydantic-settings
 passlib
-python-jose
+python-jose[cryptography]
 aiosmtplib
 httpx
 email-validator
@@ -16,7 +12,6 @@ uvicorn
 pika
 slowapi
 boto3
-python-jose[cryptography]
 passlib[bcrypt]
 python-multipart
 alembic
@@ -25,7 +20,6 @@ requests
 melo
 git+https://github.com/myshell-ai/OpenVoice.git
 qdrant-client
-zipfile36
 tqdm
 PyPDF2
 pdfplumber
@@ -34,4 +28,4 @@ groq
 langchain
 langchain-groq
 langchain-core
-fitz
+PyMuPDF
