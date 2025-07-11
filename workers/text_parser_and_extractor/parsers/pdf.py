@@ -38,13 +38,13 @@ class PDFParser:
             pages.append(text)
         return pages
 
-    def parse(self, file_path: str, book_id: str, book_title: str = None, author: str = None) -> BookStructure:
-        logger.info(f"[PDFParser] Parsing PDF: {file_path}")
+    def parse(self, pdf_buffer: bytes, book_id: str, book_title: str = None, author: str = None) -> BookStructure:
+        logger.info(f"[PDFParser] Parsing PDF buffer for book: {book_id}")
         try:
-            doc = fitz.open(file_path)
+            doc = fitz.open(stream=pdf_buffer, filetype="pdf")
             logger.debug(f"[PDFParser] Successfully opened PDF with {doc.page_count} pages")
         except Exception as e:
-            logger.error(f"[PDFParser] Failed to open PDF file {file_path}: {str(e)}")
+            logger.error(f"[PDFParser] Failed to open PDF buffer for book {book_id}: {str(e)}")
             raise
         
         pages = self._extract_text_blocks(doc)

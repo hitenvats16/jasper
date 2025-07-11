@@ -39,7 +39,9 @@ class Book(Base):
     # Relationships
     user = relationship("User", back_populates="books", lazy="joined")
     # Optional relationship with projects through association table
-    projects = relationship("Project", secondary=book_project_association, back_populates="books", lazy="joined") 
+    projects = relationship("Project", secondary=book_project_association, back_populates="books", lazy="joined")
+    # Processing jobs for this book
+    processing_jobs = relationship("BookProcessingJob", back_populates="book", lazy="joined") 
 
     @property
     def s3_public_link(self):

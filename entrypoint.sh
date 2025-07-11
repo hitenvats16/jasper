@@ -5,6 +5,8 @@ if [ "$APP_NAME" = "gateway" ]; then
 elif [ "$APP_NAME" = "worker:voice_processor" ]; then
     apt-get update && apt-get install -y ffmpeg
     python -m workers.voice_processor.main
+elif [ "$APP_NAME" = "worker:text_parser_and_extractor" ]; then
+    python -m workers.text_parser_and_extractor.main
 elif [ "$APP_NAME" = "worker:voice_generator" ]; then
     python -m workers.voice_generator
 else

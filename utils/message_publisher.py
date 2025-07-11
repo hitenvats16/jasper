@@ -4,6 +4,9 @@ from core.config import settings
 import logging
 import socket
 
+from services.book_processing_service import BookProcessingService
+from db.session import SessionLocal
+
 logger = logging.getLogger(__name__)
 
 class MessagePublisher:
@@ -62,6 +65,22 @@ def get_rabbitmq_connection():
     except Exception as e:
         logger.error(f"Failed to create RabbitMQ connection: {str(e)}")
         raise
+
+def create_book_processing_job(book):
+    """Create a BookProcessingJob for the newly created book"""
+    try:
+        # Create the processing job using the service
+        book_service = BookProcessingService()
+        job = book_service.create_and_publish_job(SessionLocal(), book)
+        
+        if job:
+            logger.info(f"Successfully created and published job {job.id} for book {book.id}")
+        else:
+            logger.error(f"Failed to create job for book {book.id}")
+        
+    except Exception as e:
+        logger.error(f"Failed to create BookProcessingJob for book {book.id}: {str(e)}")
+        # Don't fail the book creation if job creation fails
 
 def publish_voice_job(job_id: int):
     """Publish a voice processing job to RabbitMQ queue"""

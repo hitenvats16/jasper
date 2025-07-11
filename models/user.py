@@ -23,6 +23,7 @@ class User(Base):
     voices = relationship("Voice", back_populates="user", cascade="all, delete-orphan", lazy="joined")
     credit = relationship("UserCredit", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
     voice_jobs = relationship("VoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="joined")
+    book_processing_jobs = relationship("BookProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="joined")
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan", lazy="joined")
     books = relationship("Book", back_populates="user", cascade="all, delete-orphan", lazy="joined")
 

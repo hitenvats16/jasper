@@ -29,6 +29,21 @@ class BookRead(BookBase):
     class Config:
         from_attributes = True
 
+class ProcessedBookData(BaseModel):
+    """Schema for processed book data response"""
+    book_id: int
+    title: str
+    author: str
+    processing_status: str
+    processed_data: Optional[Dict[str, Any]] = None
+    processing_result: Optional[Dict[str, Any]] = None
+    last_processing_job: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
 # Project association schemas
 class BookProjectAssociation(BaseModel):
     project_id: int = Field(..., gt=0)
@@ -44,3 +59,17 @@ class BookWithProjects(BookRead):
         # Extract project IDs from the projects relationship if available
         if hasattr(self, 'projects') and self.projects:
             self.project_ids = [project.id for project in self.projects] 
+
+
+class BookProcessingJobInfo(BaseModel):
+    id: int
+    book_id: int
+    user_id: int
+    status: str
+    result: Optional[Dict[str, Any]] = None
+    processed_data: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True

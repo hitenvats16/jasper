@@ -5,6 +5,7 @@ from models.credit import UserCredit, CreditTransaction, TransactionType
 from models.default_voice import DefaultVoice
 from models.project import Project
 from models.book import Book
+from models.book_processing_job import BookProcessingJob
 
 # This ensures all models are imported and available before relationships are set up
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     'DefaultVoice',
     'Project',
     'Book',
+    'BookProcessingJob',
 ] 

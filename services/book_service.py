@@ -2,8 +2,10 @@ from sqlalchemy.orm import Session
 from models.book import Book
 from models.project import Project
 from models.user import User
+from models.book_processing_job import BookProcessingJob
+from models.voice_job import JobStatus
 from schemas.book import BookCreate, BookUpdate
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from fastapi import HTTPException, status
 import uuid
 import os
@@ -37,6 +39,54 @@ class BookService:
             Book.user_id == user_id,
             Book.is_deleted == False
         ).offset(skip).limit(limit).all()
+
+    @staticmethod
+    def get_processed_book_data(db: Session, book_id: int, user_id: int) -> Optional[Dict[str, Any]]:
+        """Get processed book data including parsing results and job status"""
+        # Get the book
+        book = BookService.get_book(db, book_id, user_id)
+        if not book:
+            return None
+
+        # Get the latest processing job for this book
+        latest_job = db.query(BookProcessingJob).filter(
+            BookProcessingJob.book_id == book_id,
+            BookProcessingJob.user_id == user_id,
+            BookProcessingJob.is_deleted == False
+        ).order_by(BookProcessingJob.created_at.desc()).first()
+        
+        # Determine processing status
+        processing_status = "not_processed"
+        if latest_job:
+            if latest_job.status == JobStatus.COMPLETED:
+                processing_status = "completed"
+            elif latest_job.status == JobStatus.PROCESSING:
+                processing_status = "processing"
+            elif latest_job.status == JobStatus.QUEUED:
+                processing_status = "queued"
+            elif latest_job.status == JobStatus.FAILED:
+                processing_status = "failed"
+    
+        # Prepare response data
+        response_data = {
+            "book_id": book.id,
+            "title": book.title,
+            "author": book.author,
+            "processing_status": processing_status,
+            "processed_data": latest_job.processed_data if latest_job else None,
+            "processing_result": latest_job.result if latest_job else None,
+            "last_processing_job": {
+                "id": latest_job.id,
+                "status": latest_job.status.value if latest_job else None,
+                "created_at": latest_job.created_at.isoformat() if latest_job else None,
+                "updated_at": latest_job.updated_at.isoformat() if latest_job else None,
+                "data": latest_job.data if latest_job else None
+            } if latest_job else None,
+            "created_at": book.created_at,
+            "updated_at": book.updated_at
+        }
+        
+        return response_data
 
     @staticmethod
     def update_book(db: Session, book_id: int, user_id: int, book_data: BookUpdate) -> Optional[Book]:

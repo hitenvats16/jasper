@@ -10,7 +10,6 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from fastapi.responses import JSONResponse
 from api.v1.endpoints import credit_router, rate_router, project_router, book_router
 from core.dependencies import get_optional_user
 from models.user import User
