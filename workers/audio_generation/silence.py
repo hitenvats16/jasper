@@ -48,12 +48,12 @@ class FixedSilenceStrategy(SilenceStrategy):
         """Return fixed silence duration."""
         return self.silence_duration_ms
 
-def create_silence_strategy(strategy_type: SilencingStrategies, **kwargs) -> SilenceStrategy:
+def create_silence_strategy(strategy_type: str, data: dict) -> SilenceStrategy:
     """Factory function to create silence strategies based on the enum.
     
     Args:
-        strategy_type: The type of silencing strategy to create
-        **kwargs: Additional arguments for the strategy constructor
+        strategy_type: The type of silencing strategy to create (string value from SilencingStrategies enum)
+        data: Configuration data for the strategy
         
     Returns:
         A configured SilenceStrategy instance
@@ -62,12 +62,11 @@ def create_silence_strategy(strategy_type: SilencingStrategies, **kwargs) -> Sil
         ValueError: If an invalid strategy type is provided
     """
     if strategy_type == SilencingStrategies.FIXED_SILENCING.value:
-        silence_duration = kwargs.get('silence_duration_ms', 200)
+        silence_duration = data.get('value', 200)
         return FixedSilenceStrategy(silence_duration_ms=silence_duration)
     
     elif strategy_type == SilencingStrategies.ADAPTIVE_SILENCING.value:
-        silence_durations = kwargs.get('silence_durations', None)
-        return AdaptiveSilenceStrategy(silence_durations=silence_durations)
+        return AdaptiveSilenceStrategy(silence_durations=data)
     
     else:
         raise ValueError(f"Invalid silencing strategy: {strategy_type}")

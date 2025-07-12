@@ -119,7 +119,7 @@ async def create_default_voice(
         HTTPException: If file format is invalid
     """
     # Upload file to S3
-    s3_key = upload_file_to_s3(file.file, file.filename, file.content_type)
+    s3_key = upload_file_to_s3(file.file, file.filename)
 
     # Create default voice record
     default_voice = DefaultVoice(

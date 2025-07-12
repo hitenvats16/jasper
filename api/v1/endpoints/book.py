@@ -64,7 +64,7 @@ async def create_book(
     # Upload file to S3
     try:
         upload_file_to_s3(
-            file.file, file.filename, file.content_type, custom_key=s3_key
+            file.file, file.filename, custom_key=s3_key
         )
     except Exception as e:
         raise HTTPException(

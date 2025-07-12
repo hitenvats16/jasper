@@ -3,7 +3,7 @@ from core.config import settings
 from uuid import uuid4
 from urllib.parse import urlparse
 
-def upload_file_to_s3(file_obj, filename, content_type, bucket=None, custom_key=None):
+def upload_file_to_s3(file_obj, filename, bucket=None, custom_key=None):
     s3 = boto3.client(
         "s3",
         endpoint_url=settings.AWS_ENDPOINT,

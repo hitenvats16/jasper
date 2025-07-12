@@ -178,7 +178,7 @@ async def create_voice(
         raise HTTPException(status_code=400, detail="Invalid metadata JSON")
 
     # Upload file to S3
-    s3_key = upload_file_to_s3(file.file, file.filename, file.content_type)
+    s3_key = upload_file_to_s3(file.file, file.filename)
 
     # Create voice record
     voice = Voice(

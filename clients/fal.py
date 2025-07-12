@@ -9,7 +9,7 @@ class FalModels(str, Enum):
     CHATTERBOX_TEXT_TO_SPEECH = "fal-ai/chatterbox/text-to-speech"
 
 class FalSynthesisKwargs(BaseModel):
-    audio_url: str = None
+    audio_url: Optional[str] = None
     exaggeration: float = 0.25
     temperature: float = 0.7
     cfg: float = 0.5

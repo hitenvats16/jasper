@@ -10,6 +10,7 @@ from models import (
     BookVoiceProcessingJob,
     User,
     ProcessedVoiceChunksType,
+    Config,
 )
 from core.config import settings
 import logging
@@ -17,6 +18,10 @@ from datetime import datetime
 import sys
 from utils.s3 import load_file_from_s3, upload_file_to_s3
 import os
+from workers.audio_generation.generator import AudiobookGenerator
+from workers.audio_generation.silence import create_silence_strategy
+from workers.audio_generation.splitter import QuoteAwareTTSTextSplittingStrategy
+from workers.audio_generation.tts import ChatterboxAudioStrategy
 
 # Configure logging
 logging.basicConfig(
@@ -55,14 +60,27 @@ class AudioGenerator(BaseWorker):
         chapter_content = chapter_data.get("chapter_content")
         meta_data = chapter_data.get("meta_data", {})
 
+        config = self.db.query(Config).filter(Config.user_id == user.id).first()
+
+        # Note: Pick tts model dynamically based on the user's config later
+        tts_model = ChatterboxAudioStrategy()
+
+        # Use default silence strategy if config is not available
+        if config and config.silence_strategy:
+            silence_strategy = create_silence_strategy(config.silence_strategy, config.silence_data or {})
+        else:
+            from workers.audio_generation.silence import AdaptiveSilenceStrategy
+            silence_strategy = AdaptiveSilenceStrategy()
+
+        audiobook_generator = AudiobookGenerator(
+            audio_strategy=tts_model,
+            chunking_strategy=QuoteAwareTTSTextSplittingStrategy(max_tokens=30),
+            silence_strategy=silence_strategy,
+        )
+
         logger.info(f"Generating audio for chapter {chapter_id}: {chapter_title}")
 
         try:
-            # Create temporary file path for this chapter
-            temp_audio_path = os.path.join(
-                self.base_file_path, f"chapter_{chapter_id}_{job.id}.wav"
-            )
-
             # Generate audio using the audiobook generator
             params = audio_generation_params or {}
             audio_gen_params = {
@@ -90,24 +108,25 @@ class AudioGenerator(BaseWorker):
                     db.close()
 
             # Generate audio
-            buffer = self.audiobook_generator.generate(
+            buffer = audiobook_generator.generate(
                 large_text=chapter_content,
                 audio_gen_params=audio_gen_params,
-                preview_final_audio=False,
             )
 
-            # Upload to S3
-            s3_key = f"voice_chunks/{user.id}/{book.id}/{chapter_id}_{job.id}.wav"
-            upload_file_to_s3(file_obj=buffer, custom_key=s3_key)
-
-            # Get file duration
+            # Get file duration from the buffer first
             from pydub import AudioSegment
 
-            audio = AudioSegment.from_wav(temp_audio_path)
+            buffer.seek(0)  # Reset buffer position
+            audio = AudioSegment.from_wav(buffer)
             duration = len(audio) / 1000.0  # Convert to seconds
 
-            # Clean up temporary file
-            os.remove(temp_audio_path)
+            # Reset buffer position for S3 upload
+            buffer.seek(0)
+
+            # Upload to S3
+            filename = f"{chapter_id}_{job.id}.wav"
+            s3_key = f"voice_chunks/{user.id}/{book.id}/{filename}"
+            upload_file_to_s3(file_obj=buffer, custom_key=s3_key, filename=filename)
 
             return {
                 "s3_key": s3_key,
@@ -139,11 +158,11 @@ class AudioGenerator(BaseWorker):
 
         job = (
             self.db.query(BookVoiceProcessingJob)
-            .filter(BookVoiceProcessingJob.id == job_id)
+            .filter(BookVoiceProcessingJob.id == int(job_id))
             .first()
         )
-        user = self.db.query(User).filter(User.id == user_id).first()
-        book = self.db.query(Book).filter(Book.id == book_id).first()
+        user = self.db.query(User).filter(User.id == int(user_id)).first()
+        book = self.db.query(Book).filter(Book.id == int(book_id)).first()
         voice = (
             self.db.query(Voice)
             .filter(
@@ -152,9 +171,9 @@ class AudioGenerator(BaseWorker):
                 Voice.user_id == user_id,
             )
             .first()
-        )
+        ) if voice_id else None
 
-        if not job or not user or not book or not voice:
+        if not job or not user or not book:
             logger.error(f"Job {job_id} not found")
             return
 
@@ -204,7 +223,7 @@ class AudioGenerator(BaseWorker):
                             "format": result["format"],
                             "processing_time": datetime.utcnow().isoformat(),
                         },
-                        type=ProcessedVoiceChunksType.CHAPTER_AUDIO.value,
+                        type=ProcessedVoiceChunksType.PARTIAL_AUDIO,
                     )
 
                     processed_chapters += 1
@@ -291,13 +310,13 @@ class AudioGenerator(BaseWorker):
         chapter_id: str,
         s3_key: str,
         index: int,
-        data: dict = None,
-        type: ProcessedVoiceChunksType = ProcessedVoiceChunksType.PARTIAL_AUDIO.value,
+        type: ProcessedVoiceChunksType,
+        data: dict = {}
     ):
         """Create processed chunk record via API"""
         try:
             processed_chunk = ProcessedVoiceChunks(
-                job_id=job_id,
+                voice_processing_job_id=job_id,
                 user_id=user_id,
                 book_id=book_id,
                 chapter_id=chapter_id,
