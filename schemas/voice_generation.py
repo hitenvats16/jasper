@@ -29,6 +29,7 @@ class VoiceGenerationResponse(BaseModel):
 class ProcessedVoiceChunkResponse(BaseModel):
     id: int
     s3_key: str
+    s3_public_link: str  # S3 public URL for the voice file
     index: int
     chapter_id: str
     data: Optional[Dict[str, Any]]

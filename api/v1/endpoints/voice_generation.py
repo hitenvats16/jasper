@@ -7,11 +7,12 @@ from models.user import User
 from services.voice_generation_service import VoiceGenerationService
 from schemas.voice_generation import (
     VoiceGenerationRequest, 
-    VoiceGenerationResponse
+    VoiceGenerationResponse,
+    ProcessedVoiceChunkResponse
 )
 from datetime import datetime
 from models.voice_job import JobStatus
-from models.processed_voice_chunks import ProcessedVoiceChunks
+from models.processed_voice_chunks import ProcessedVoiceChunks, ProcessedVoiceChunksType
 from models.book_voice_processing_job import BookVoiceProcessingJob
 
 router = APIRouter()
@@ -99,3 +100,109 @@ async def get_user_jobs(
         }
         for job in jobs
     ]
+
+@router.get("/generated-voices/{book_id}", response_model=List[ProcessedVoiceChunkResponse])
+async def get_generated_voices(
+    book_id: int,
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get the list of generated voices for a specific book.
+    
+    This endpoint retrieves all ProcessedVoiceChunks with type CHAPTER_AUDIO for the specified book,
+    sorted in ascending order by index, and includes S3 public links for each voice file.
+    """
+    try:
+        # Verify the book belongs to the user
+        from models.book import Book
+        book = db.query(Book).filter(
+            Book.id == book_id,
+            Book.user_id == current_user.id,
+            Book.is_deleted == False
+        ).first()
+        
+        if not book:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Book not found or access denied"
+            )
+        
+        # Query ProcessedVoiceChunks with type CHAPTER_AUDIO for this book
+        voice_chunks = db.query(ProcessedVoiceChunks).filter(
+            ProcessedVoiceChunks.book_id == book_id,
+            ProcessedVoiceChunks.user_id == current_user.id,
+            ProcessedVoiceChunks.type == ProcessedVoiceChunksType.CHAPTER_AUDIO,
+            ProcessedVoiceChunks.is_deleted == False
+        ).order_by(ProcessedVoiceChunks.index.asc()).offset(skip).limit(limit).all()
+        
+        # Convert to response model with s3_links
+        response_data = []
+        for chunk in voice_chunks:
+            chunk_data = ProcessedVoiceChunkResponse(
+                id=chunk.id,
+                s3_key=chunk.s3_key,
+                s3_public_link=chunk.s3_public_link,  # Include the S3 public link
+                index=chunk.index,
+                chapter_id=chunk.chapter_id,
+                data=chunk.data,
+                created_at=chunk.created_at
+            )
+            response_data.append(chunk_data)
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve generated voices: {str(e)}"
+        )
+
+@router.get("/all-generated-voices", response_model=List[ProcessedVoiceChunkResponse])
+async def get_all_generated_voices(
+    skip: int = Query(0, ge=0, description="Number of records to skip"),
+    limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Get all generated voices for the current user across all their books.
+    
+    This endpoint retrieves all ProcessedVoiceChunks with type CHAPTER_AUDIO for the current user,
+    sorted in ascending order by index, and includes S3 public links for each voice file.
+    """
+    try:
+        # Query ProcessedVoiceChunks with type CHAPTER_AUDIO for this user
+        voice_chunks = db.query(ProcessedVoiceChunks).filter(
+            ProcessedVoiceChunks.user_id == current_user.id,
+            ProcessedVoiceChunks.type == ProcessedVoiceChunksType.CHAPTER_AUDIO,
+            ProcessedVoiceChunks.is_deleted == False
+        ).order_by(ProcessedVoiceChunks.index.asc()).offset(skip).limit(limit).all()
+        
+        # Convert to response model with s3_links
+        response_data = []
+        for chunk in voice_chunks:
+            chunk_data = ProcessedVoiceChunkResponse(
+                id=chunk.id,
+                s3_key=chunk.s3_key,
+                s3_public_link=chunk.s3_public_link,  # Include the S3 public link
+                index=chunk.index,
+                chapter_id=chunk.chapter_id,
+                data=chunk.data,
+                created_at=chunk.created_at
+            )
+            response_data.append(chunk_data)
+        
+        return response_data
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to retrieve generated voices: {str(e)}"
+        )
