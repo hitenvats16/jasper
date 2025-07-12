@@ -10,12 +10,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from api.v1.endpoints import credit_router, rate_router, project_router, book_router
+from api.v1.endpoints import credit_router, rate_router, project_router, book_router, voice_generation_router
 from core.dependencies import get_optional_user
 from models.user import User
 import logging
 import sys
 from utils.message_publisher import get_rabbitmq_connection
+from api.v1.endpoints import config_router
+from core.config import settings
 
 # Configure logging
 logging.basicConfig(
@@ -176,6 +178,14 @@ def custom_openapi():
                 "description": "Book Management Guide",
                 "url": "https://docs.jasper.ai/books"
             }
+        },
+        {
+            "name": "Voice Generation",
+            "description": "Voice generation endpoints for creating audio from text chapters",
+            "externalDocs": {
+                "description": "Voice Generation Guide",
+                "url": "https://docs.jasper.ai/voice-generation"
+            }
         }
     ]
     
@@ -258,6 +268,21 @@ app.include_router(
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 
+app.include_router(
+    voice_generation_router,
+    prefix="/api/v1/voice-generation",
+    tags=["Voice Generation"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
+
+app.include_router(
+    config_router,
+    prefix="/api/v1/config",
+    tags=["Config"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
+
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
+    print(f"Starting server on port {port}")
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)

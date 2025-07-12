@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Tuple
+from .enums import SilencingStrategies
 
 class SilenceStrategy(ABC):
     """Protocol for silence insertion strategies."""
@@ -10,7 +11,10 @@ class SilenceStrategy(ABC):
         ...
 
 class AdaptiveSilenceStrategy(SilenceStrategy):
-    """Adaptive silence strategy based on punctuation and paragraph breaks."""
+    """Adaptive silence strategy based on punctuation and paragraph breaks.
+    
+    This strategy corresponds to SilencingStrategies.ADAPTIVE_SILENCING.
+    """
     
     def __init__(self, silence_durations: Dict[str, int] = None):
         self.silence_durations = silence_durations or {
@@ -32,7 +36,10 @@ class AdaptiveSilenceStrategy(SilenceStrategy):
             return self.silence_durations.get("default", 150)
 
 class FixedSilenceStrategy(SilenceStrategy):
-    """Fixed silence duration strategy."""
+    """Fixed silence duration strategy.
+    
+    This strategy corresponds to SilencingStrategies.FIXED_SILENCING.
+    """
     
     def __init__(self, silence_duration_ms: int = 200):
         self.silence_duration_ms = silence_duration_ms
@@ -40,3 +47,27 @@ class FixedSilenceStrategy(SilenceStrategy):
     def get_silence_duration(self, chunk_text: str, is_paragraph_end: bool, **kwargs) -> int:
         """Return fixed silence duration."""
         return self.silence_duration_ms
+
+def create_silence_strategy(strategy_type: SilencingStrategies, **kwargs) -> SilenceStrategy:
+    """Factory function to create silence strategies based on the enum.
+    
+    Args:
+        strategy_type: The type of silencing strategy to create
+        **kwargs: Additional arguments for the strategy constructor
+        
+    Returns:
+        A configured SilenceStrategy instance
+        
+    Raises:
+        ValueError: If an invalid strategy type is provided
+    """
+    if strategy_type == SilencingStrategies.FIXED_SILENCING.value:
+        silence_duration = kwargs.get('silence_duration_ms', 200)
+        return FixedSilenceStrategy(silence_duration_ms=silence_duration)
+    
+    elif strategy_type == SilencingStrategies.ADAPTIVE_SILENCING.value:
+        silence_durations = kwargs.get('silence_durations', None)
+        return AdaptiveSilenceStrategy(silence_durations=silence_durations)
+    
+    else:
+        raise ValueError(f"Invalid silencing strategy: {strategy_type}")

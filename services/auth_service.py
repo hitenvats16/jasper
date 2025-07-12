@@ -1,11 +1,14 @@
 from sqlalchemy.orm import Session
 from models.user import User, OAuthAccount
+from models.config import Config
 from schemas.user import UserCreate
 from core.security import hash_password, verify_password
 from typing import Optional
 from utils.email import send_email_async
 from core.config import settings
 from services.voice_service import VoiceService
+from clients.fal import FalModels
+from workers.audio_generation.enums import SilencingStrategies
 import random, string
 import httpx
 from datetime import datetime, timezone, timedelta
@@ -15,6 +18,27 @@ logger = logging.getLogger(__name__)
 
 # In-memory store for verification codes (for demo; use Redis in prod)
 verification_codes = {}
+
+def create_default_config(db: Session, user_id: int):
+    """Create a default config for a new user."""
+    try:
+        default_config = Config(
+            user_id=user_id,
+            tts_model=FalModels.CHATTERBOX_TEXT_TO_SPEECH.value,
+            tts_model_data={},
+            silence_strategy=SilencingStrategies.FIXED_SILENCING.value,
+            silence_data={"value": 300},
+            sample_rate=24000
+        )
+        db.add(default_config)
+        db.commit()
+        db.refresh(default_config)
+        logger.info(f"Successfully created default config for user {user_id}")
+        return default_config
+    except Exception as e:
+        logger.error(f"Failed to create default config for user {user_id}: {str(e)}")
+        # Don't fail user registration if config creation fails
+        return None
 
 def register_user(db: Session, user_in: UserCreate):
     user = db.query(User).filter(User.email == user_in.email).first()
@@ -33,6 +57,14 @@ def register_user(db: Session, user_in: UserCreate):
     except Exception as e:
         logger.error(f"Failed to seed default voices for user {user.id}: {str(e)}")
         # Don't fail user registration if voice seeding fails
+    
+    # Create default config for the new user
+    try:
+        create_default_config(db, user.id)
+        logger.info(f"Successfully created default config for user {user.id}")
+    except Exception as e:
+        logger.error(f"Failed to create default config for user {user.id}: {str(e)}")
+        # Don't fail user registration if config creation fails
     
     # Generate and send verification code
     code = ''.join(random.choices(string.digits, k=6))
@@ -115,6 +147,14 @@ def get_or_create_user_by_google_oauth(db: Session, code: str, redirect_uri: str
         except Exception as e:
             logger.error(f"Failed to seed default voices for OAuth user {user.id}: {str(e)}")
             # Don't fail OAuth user creation if voice seeding fails
+        
+        # Create default config for the new OAuth user
+        try:
+            create_default_config(db, user.id)
+            logger.info(f"Successfully created default config for OAuth user {user.id}")
+        except Exception as e:
+            logger.error(f"Failed to create default config for OAuth user {user.id}: {str(e)}")
+            # Don't fail OAuth user creation if config creation fails
     # Find or create OAuthAccount
     oauth = db.query(OAuthAccount).filter_by(user_id=user.id, provider="google").first()
     if not oauth:

@@ -6,6 +6,9 @@ from models.default_voice import DefaultVoice
 from models.project import Project
 from models.book import Book
 from models.book_processing_job import BookProcessingJob
+from models.book_voice_processing_job import BookVoiceProcessingJob
+from models.processed_voice_chunks import ProcessedVoiceChunks, ProcessedVoiceChunksType
+from models.config import Config
 
 # This ensures all models are imported and available before relationships are set up
 __all__ = [
@@ -21,4 +24,8 @@ __all__ = [
     'Project',
     'Book',
     'BookProcessingJob',
+    'BookVoiceProcessingJob',
+    'ProcessedVoiceChunks',
+    'Config',
+    'ProcessedVoiceChunksType',
 ] 

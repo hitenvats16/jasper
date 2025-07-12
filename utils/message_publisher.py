@@ -106,4 +106,30 @@ def publish_voice_job(job_id: int):
         connection.close()
     except Exception as e:
         logger.error(f"Failed to publish voice job {job_id}: {str(e)}")
+        raise
+
+def publish_message(queue_name: str, message: str):
+    """Publish a message to the specified queue"""
+    try:
+        connection = get_rabbitmq_connection()
+        channel = connection.channel()
+        
+        # Ensure queue exists
+        channel.queue_declare(queue=queue_name, durable=True)
+        
+        # Publish message
+        channel.basic_publish(
+            exchange='',
+            routing_key=queue_name,
+            body=message,
+            properties=pika.BasicProperties(
+                delivery_mode=2,  # make message persistent
+            )
+        )
+        logger.info(f"Published message to queue {queue_name}")
+        
+        # Close connection
+        connection.close()
+    except Exception as e:
+        logger.error(f"Failed to publish message to queue {queue_name}: {str(e)}")
         raise 

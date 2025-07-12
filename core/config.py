@@ -37,8 +37,8 @@ class Settings(BaseSettings):
     RABBITMQ_URL: str
     RABBITMQ_VHOST: str = ""
     VOICE_PROCESSING_QUEUE: str = "voice_processing"
-    AUDIO_GENERATION_QUEUE: str = "audio_generation"
     TEXT_PARSER_QUEUE: str = "text_parser"
+    VOICE_GENERATION_QUEUE: str = "audio_generation"
     
     # Qdrant settings
     QDRANT_URL: str

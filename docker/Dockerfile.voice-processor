@@ -1,0 +1,23 @@
+FROM python:3.9-slim
+
+WORKDIR /code
+
+# Install system dependencies including ffmpeg for audio processing
+RUN apt-get update && apt-get install -y \
+    ffmpeg \
+    git \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY ./requirements.txt /code/requirements.txt
+
+# Install Python dependencies with basic retry
+RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt || \
+    (sleep 5 && pip install --no-cache-dir --upgrade -r /code/requirements.txt)
+
+COPY . /code
+
+ENV APP_NAME=worker:voice_processor
+
+CMD ["python", "-m", "workers.voice_processor.main"] 

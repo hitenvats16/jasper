@@ -1,0 +1,45 @@
+version: '3.8'
+
+services:
+  text-parser:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.text-parser
+    env_file:
+      - .env
+    environment:
+      - APP_NAME=worker:text_parser_and_extractor
+    network_mode: host
+    restart: unless-stopped
+    deploy:
+      replicas: 5
+
+  voice-processor:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.voice-processor
+    env_file:
+      - .env
+    environment:
+      - APP_NAME=worker:voice_processor
+    network_mode: host
+    restart: unless-stopped
+    deploy:
+      replicas: 5
+
+  audio-generator:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.audio-generator
+    env_file:
+      - .env
+    environment:
+      - APP_NAME=worker:voice_generator
+    network_mode: host
+    restart: unless-stopped
+    deploy:
+      replicas: 5
+
+networks:
+  jasper-network:
+    driver: bridge 

@@ -1,4 +1,4 @@
-import fitz 
+import fitz
 import uuid
 import logging
 from typing import List, Optional

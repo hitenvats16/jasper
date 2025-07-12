@@ -1,0 +1,25 @@
+FROM python:3.9-slim
+
+WORKDIR /code
+
+# Install system dependencies for building packages
+RUN apt-get update && apt-get install -y \
+    git \
+    gcc \
+    g++ \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY ./requirements.txt /code/requirements.txt
+
+# Install Python dependencies with basic retry
+RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt || \
+    (sleep 5 && pip install --no-cache-dir --upgrade -r /code/requirements.txt)
+
+COPY . /code
+
+ENV PORT=8000
+ENV APP_NAME=gateway
+
+EXPOSE 8000
+
+CMD ["python", "-m", "main"] 

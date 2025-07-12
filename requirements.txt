@@ -29,3 +29,5 @@ langchain
 langchain-groq
 langchain-core
 PyMuPDF
+spacy
+numpy<2

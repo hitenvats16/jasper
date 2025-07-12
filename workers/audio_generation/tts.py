@@ -1,76 +1,65 @@
-from chatterbox.tts import ChatterboxTTS
-import torch
-import numpy as np
-import random
-import os
 from abc import ABC, abstractmethod
-
-try:
-    from IPython.display import Audio, display
-except ImportError:
-    print("IPython.display not found. Audio preview in notebook will not be available.")
-    # Define dummy functions if not in IPython environment
-    def Audio(data, rate):
-        print("Audio playback unavailable (IPython.display not imported).")
-        return None
-    def display(obj):
-        print(f"Display unavailable. Object type: {type(obj)}")
-
-def set_seed(seed: int):
-    """Sets the random seed for reproducibility."""
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
-    random.seed(seed)
-    np.random.seed(seed)
-    print(f"[Seed] Random seeds set to {seed}")
+from pydantic import HttpUrl
+import requests
+from io import BytesIO
+from clients.fal import FalTTSClient, FalModels, FalSynthesisKwargs
 
 class AudioGenerationStrategy(ABC):
     """Protocol for audio generation strategies."""
 
     @abstractmethod
-    def generate_audio(self, text: str, **kwargs) -> np.ndarray:
-        """Generate audio from text and return as numpy array."""
+    def generate_audio(self, text: str, **kwargs) -> BytesIO:
+        """Generate audio from text and return as buffer."""
         ...
 
 class ChatterboxAudioStrategy(AudioGenerationStrategy):
     """Strategy for generating audio using Chatterbox TTS model."""
     
-    def __init__(self, sample_rate: int = 24000):
-        self.model = ChatterboxTTS.from_pretrained(device="cuda")
+    def __init__(self, sample_rate: int = 44100):  # Higher sample rate for better quality
         self.sample_rate = sample_rate
-        print(f"[ChatterboxAudioStrategy] Model loaded")
+        self.client = FalTTSClient(
+            model_name=FalModels.CHATTERBOX_TEXT_TO_SPEECH.value
+        )
     
     def generate_audio(self, 
                       text: str,
-                      exaggeration: float = 0.65,
-                      temperature: float = 1,
-                      seed_num: int = 45674,
-                      cfgw: float = 0.1,
-                      min_p: float = 0.05,
-                      top_p: float = 1.0,
-                      repetition_penalty: float = 1.2,
-                      audio_prompt_path: str = None,
-                      **kwargs) -> np.ndarray:
-        """Generate audio using Chatterbox TTS."""
-        if seed_num != 0:
-            set_seed(int(seed_num))
-        
+                      audio_generation_params: dict = None) -> BytesIO:
         try:
-            wav_data = self.model.generate(
-                text,
+            # Use provided params or defaults optimized for quality
+            params = audio_generation_params or {}
+            exaggeration = params.get('exaggeration', 0.25)  # Lower for more natural speech
+            temperature = params.get('temperature', 0.7)     # Balanced creativity
+            cfg = params.get('cfg', 0.5)                    # Higher for more stable output
+            seed = params.get('seed', None)
+            audio_url = params.get('audio_url', None)
+            
+            print(f"[ChatterboxAudioStrategy] Generating audio with params: exaggeration={exaggeration}, temperature={temperature}, cfg={cfg}")
+            
+            response = self.client.synthesize(text, FalSynthesisKwargs(
                 exaggeration=exaggeration,
                 temperature=temperature,
-                cfg_weight=cfgw,
-                min_p=min_p,
-                top_p=top_p,
-                repetition_penalty=repetition_penalty,
-                audio_prompt_path=audio_prompt_path
-            )
-            wav_data = wav_data.cpu().numpy()
-            display(Audio(wav_data, rate=self.sample_rate))
-            return wav_data.squeeze()
+                cfg=cfg,
+                seed=seed,
+                audio_url=audio_url
+            ))
+            
+            if not response or 'url' not in response:
+                print(f"[ChatterboxAudioStrategy] No valid response received: {response}")
+                return None
+                
+            print(f"[ChatterboxAudioStrategy] Audio URL received: {response.get('url')}")
+            
+            # Download the audio from the URL
+            audio_response = requests.get(response.get('url'))
+            audio_response.raise_for_status()  # Raise an exception for bad status codes
+            
+            # Return the audio as a buffer
+            audio_buffer = BytesIO(audio_response.content)
+            print(f"[ChatterboxAudioStrategy] Downloaded audio size: {len(audio_response.content)} bytes")
+            return audio_buffer
+            
         except Exception as e:
-            print(f"Error generating audio for chunk: {e}")
-            # Return silence as fallback
-            return np.zeros(int(self.sample_rate * 0.5), dtype=np.float32)  # 500ms silence
+            print(f"[ChatterboxAudioStrategy] Error generating audio for chunk: {e}")
+            import traceback
+            traceback.print_exc()
+            return None

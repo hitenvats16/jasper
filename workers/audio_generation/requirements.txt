@@ -1,7 +1,0 @@
-chatterbox-tts
-numpy 
-pydub 
-typing 
-spacy 
-scipy
-torch

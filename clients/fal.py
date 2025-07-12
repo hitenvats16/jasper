@@ -3,12 +3,13 @@ import fal_client.client
 from core.config import settings
 from enum import Enum
 from pydantic import BaseModel, HttpUrl
+from typing import Optional
 
 class FalModels(str, Enum):
     CHATTERBOX_TEXT_TO_SPEECH = "fal-ai/chatterbox/text-to-speech"
 
 class FalSynthesisKwargs(BaseModel):
-    audio_url: HttpUrl = None
+    audio_url: str = None
     exaggeration: float = 0.25
     temperature: float = 0.7
     cfg: float = 0.5
@@ -38,11 +39,13 @@ class FalTTSClient:
         arguments = {"text": text}
         if kwargs:
             arguments.update(kwargs.model_dump())
+        # Remove all keys from arguments where the value is None
+        arguments = {k: v for k, v in arguments.items() if v is not None}
         result = self.client.subscribe(
             self.model_name,
             arguments=arguments,
             with_logs=True,
             on_queue_update=self.on_queue_update,
         )
-        print(result)
+        print(f"[FalTTSClient] Result: {result}")
         return result.get("audio")
