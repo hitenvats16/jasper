@@ -52,6 +52,11 @@ class Settings(BaseSettings):
 
     # Fal.AI settings
     FAL_API_KEY: str
+    
+    # LemonSqueezy settings
+    LEMON_SQUEEZY_API_KEY: Optional[str] = None
+    LEMON_SQUEEZY_WEBHOOK_SECRET: Optional[str] = None
+    LEMON_SQUEEZY_STORE_ID: Optional[str] = None
 
     @validator("SQLALCHEMY_DATABASE_URL", pre=True)
     def validate_database_url(cls, v):

@@ -29,6 +29,9 @@ class User(Base):
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan", lazy="joined")
     books = relationship("Book", back_populates="user", cascade="all, delete-orphan", lazy="joined")
     config = relationship("Config", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
+    # Payment relationships
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan", lazy="joined")
+    refunds = relationship("PaymentRefund", back_populates="user", cascade="all, delete-orphan", lazy="joined")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_account"

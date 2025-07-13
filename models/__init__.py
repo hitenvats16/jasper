@@ -9,6 +9,10 @@ from models.book_processing_job import BookProcessingJob
 from models.book_voice_processing_job import BookVoiceProcessingJob
 from models.processed_voice_chunks import ProcessedVoiceChunks, ProcessedVoiceChunksType
 from models.config import Config
+from models.payment import (
+    PaymentPlan, Payment, PaymentRefund,
+    PlanType, PaymentStatus, RefundStatus
+)
 
 # This ensures all models are imported and available before relationships are set up
 __all__ = [
@@ -28,4 +32,10 @@ __all__ = [
     'ProcessedVoiceChunks',
     'Config',
     'ProcessedVoiceChunksType',
+    'PaymentPlan',
+    'Payment',
+    'PaymentRefund',
+    'PlanType',
+    'PaymentStatus',
+    'RefundStatus',
 ] 

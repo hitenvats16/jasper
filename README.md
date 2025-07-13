@@ -1,6 +1,6 @@
 # Jasper Voice Gateway
 
-A FastAPI-based voice processing and management API with RabbitMQ for asynchronous job processing.
+A FastAPI-based voice processing and management API with RabbitMQ for asynchronous job processing and LemonSqueezy payment integration.
 
 ## Features
 
@@ -11,6 +11,8 @@ A FastAPI-based voice processing and management API with RabbitMQ for asynchrono
 - AWS S3 integration for file storage
 - Email verification system
 - Google OAuth integration
+- LemonSqueezy payment integration with automatic product sync
+- Credit-based system for voice processing
 - Rate limiting
 - Dockerized deployment
 
@@ -52,6 +54,11 @@ GOOGLE_CLIENT_ID=your-google-client-id
 GOOGLE_CLIENT_SECRET=your-google-client-secret
 GOOGLE_REDIRECT_URI=http://localhost:8000/api/v1/auth/google/callback
 
+# LemonSqueezy Payment Integration
+LEMON_SQUEEZY_API_KEY=your-lemonsqueezy-api-key
+LEMON_SQUEEZY_WEBHOOK_SECRET=your-lemonsqueezy-webhook-secret
+LEMON_SQUEEZY_STORE_ID=your-store-id
+
 # AWS S3
 AWS_ACCESS_KEY_ID=your-aws-access-key
 AWS_SECRET_ACCESS_KEY=your-aws-secret-key
@@ -61,18 +68,25 @@ AWS_S3_BUCKET=your-bucket-name
 
 ## Running the Application
 
-1. Build and start the containers:
+1. **Setup Database Tables** (First time only):
+   ```bash
+   python run_payment_migration.py
+   ```
+
+2. Build and start the containers:
    ```bash
    docker-compose up --build
    ```
 
-2. The following services will be available:
+3. The following services will be available:
    - FastAPI application: http://localhost:8000
    - API documentation: http://localhost:8000/docs
    - PgAdmin: http://localhost:5050
    - RabbitMQ management: http://localhost:15672
 
-3. To stop the application:
+4. **Product Sync**: On startup, the application will automatically sync products from LemonSqueezy to the payment plans table. You can also manually trigger this via the admin endpoint.
+
+5. To stop the application:
    ```bash
    docker-compose down
    ```
@@ -95,6 +109,25 @@ Once the application is running, you can access:
 - Swagger UI: http://localhost:8000/docs
 - ReDoc: http://localhost:8000/redoc
 
+### Payment Endpoints
+
+The application includes comprehensive payment management endpoints:
+
+- `GET /api/v1/payments/plans` - Get all available payment plans
+- `POST /api/v1/payments/checkout` - Create a checkout session
+- `GET /api/v1/payments/my-payments` - Get user's payment history
+- `GET /api/v1/payments/my-payment-summary` - Get user's payment summary
+- `POST /api/v1/payments/refunds` - Request a refund
+- `POST /api/v1/payments/admin/sync-products` - Sync products from LemonSqueezy (Admin only)
+
+### Product Sync
+
+The system automatically syncs products from LemonSqueezy on startup and provides:
+- Automatic credit calculation based on product names and prices
+- Support for product variants
+- Real-time updates when products change in LemonSqueezy
+- Manual sync capability via admin endpoint
+
 ## Monitoring
 
 - RabbitMQ Management Interface: http://localhost:15672
@@ -104,6 +137,20 @@ Once the application is running, you can access:
 - PgAdmin: http://localhost:5050
   - Email: admin@admin.com
   - Password: admin
+
+## Testing
+
+To test the payment integration:
+
+```bash
+python tests/test_payment_integration.py
+```
+
+This will test:
+- Product fetching from LemonSqueezy
+- Product sync to database
+- Credit calculation logic
+- Payment plan creation
 
 ## Contributing
 

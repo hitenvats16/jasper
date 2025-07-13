@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from api.v1.endpoints import credit_router, rate_router, project_router, book_router, voice_generation_router
+from api.v1.endpoints import credit_router, rate_router, project_router, book_router, voice_generation_router, payment
 from core.dependencies import get_optional_user
 from models.user import User
 import logging
@@ -30,7 +30,7 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
-def on_startup():
+async def on_startup():
     try:
         # Initialize database
         logger.info("Initializing database...")
@@ -49,6 +49,25 @@ def on_startup():
     except Exception as e:
         logger.warning(f"RabbitMQ connection failed: {str(e)}")
         logger.warning("Application will start without RabbitMQ. Some features may be limited.")
+    
+    # Sync LemonSqueezy products to plans table
+    try:
+        logger.info("Starting LemonSqueezy product sync...")
+        from services.lemonsqueezy_service import LemonSqueezyService
+        from db.session import SessionLocal
+        
+        lemon_service = LemonSqueezyService()
+        db = SessionLocal()
+        
+        try:
+            sync_result = await lemon_service.sync_products_to_plans(db)
+            logger.info(f"LemonSqueezy product sync completed: {sync_result}")
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Failed to sync LemonSqueezy products: {str(e)}")
+        logger.warning("Application will start without synced products. Payment plans may not be available.")
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -279,6 +298,13 @@ app.include_router(
     config_router,
     prefix="/api/v1/config",
     tags=["Config"],
+    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+)
+
+app.include_router(
+    payment.router,
+    prefix="/api/v1/payments",
+    tags=["Payments"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 

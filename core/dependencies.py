@@ -73,4 +73,46 @@ async def get_optional_user(
             request.state.user = user
         return user
     except Exception:
-        return None 
+        return None
+
+async def get_current_admin_user(
+    request: Request,
+    db: Session = Depends(get_db),
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+) -> User:
+    """
+    Dependency for getting the current authenticated admin user.
+    Raises 401 if token is invalid or expired, 403 if user is not admin.
+    """
+    try:
+        token = credentials.credentials
+        payload = decode_access_token(token)
+        if not payload:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired token"
+            )
+        
+        user = db.query(User).filter_by(id=payload["user_id"]).first()
+        if not user:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="User not found"
+            )
+        
+        if not user.is_admin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Admin access required"
+            )
+        
+        # Add user to request state for easy access
+        request.state.user = user
+        return user
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail=str(e)
+        ) 
