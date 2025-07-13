@@ -18,6 +18,7 @@ import sys
 from utils.message_publisher import get_rabbitmq_connection
 from api.v1.endpoints import config_router
 from core.config import settings
+from datetime import datetime
 
 # Configure logging
 logging.basicConfig(
@@ -31,6 +32,13 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 async def on_startup():
+    # Check if we're in fast startup mode
+    fast_startup = os.environ.get("FAST_STARTUP", "0") == "1"
+    
+    if fast_startup:
+        logger.info("🚀 Fast startup mode - skipping heavy operations")
+        return
+    
     try:
         # Initialize database
         logger.info("Initializing database...")
@@ -50,9 +58,14 @@ async def on_startup():
         logger.warning(f"RabbitMQ connection failed: {str(e)}")
         logger.warning("Application will start without RabbitMQ. Some features may be limited.")
     
-    # Sync LemonSqueezy products to plans table
+    # Start LemonSqueezy product sync in background (non-blocking)
+    import asyncio
+    asyncio.create_task(sync_lemonsqueezy_products())
+
+async def sync_lemonsqueezy_products():
+    """Sync LemonSqueezy products in background"""
     try:
-        logger.info("Starting LemonSqueezy product sync...")
+        logger.info("Starting LemonSqueezy product sync in background...")
         from services.lemonsqueezy_service import LemonSqueezyService
         from db.session import SessionLocal
         
@@ -67,7 +80,7 @@ async def on_startup():
             
     except Exception as e:
         logger.error(f"Failed to sync LemonSqueezy products: {str(e)}")
-        logger.warning("Application will start without synced products. Payment plans may not be available.")
+        logger.warning("Application will continue without synced products. Payment plans may not be available.")
 
 # Initialize rate limiter
 limiter = Limiter(key_func=get_remote_address)
@@ -232,10 +245,22 @@ async def health(
     if current_user:
         response["user"] = {
             "id": current_user.id,
-            "email": current_user.email
+            "email": current_user.email,
+            "is_verified": current_user.is_verified
         }
     
     return response
+
+@app.get("/health/simple")
+async def health_simple():
+    """
+    Simple health check endpoint without any dependencies for quick response.
+    """
+    return {
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": app.version
+    }
 
 # Include routers with rate limiting
 app.include_router(
@@ -311,4 +336,14 @@ app.include_router(
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 8000))
     print(f"Starting server on port {port}")
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
+    
+    # Optimized settings for direct execution
+    uvicorn.run(
+        "main:app", 
+        host="0.0.0.0", 
+        port=port, 
+        reload=False,  # Disable reload for better performance
+        workers=1,     # Single worker for development
+        access_log=True,
+        log_level="info"
+    )

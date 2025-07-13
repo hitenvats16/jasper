@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Request, BackgroundTasks
 from sqlalchemy.orm import Session
 from typing import List, Optional
+import json
 from models.user import User
 from models.payment import (
     PaymentPlan, Payment, PaymentRefund,
@@ -10,7 +11,7 @@ from schemas.payment import (
     PaymentPlanCreate, PaymentPlanUpdate, PaymentPlanRead,
     PaymentRead, PaymentRefundRead,
     CreateCheckoutSessionRequest, CheckoutSessionResponse,
-    UserPaymentSummary, PaymentStats
+    UserPaymentSummary, PaymentStats, WebhookContent
 )
 from services.lemonsqueezy_service import LemonSqueezyService
 from db.session import get_db
@@ -130,12 +131,13 @@ async def create_checkout_session(
 # Webhook Endpoint
 @router.post("/webhook", summary="LemonSqueezy webhook endpoint")
 async def webhook_handler(
+    webhook_data: WebhookContent,
     request: Request,
     db: Session = Depends(get_db)
 ):
     """Handle LemonSqueezy webhook events"""
     try:
-        # Get the raw body
+        # Get the raw body for signature verification
         body = await request.body()
         
         # Verify webhook signature
@@ -143,8 +145,8 @@ async def webhook_handler(
         if not lemonsqueezy_service.verify_webhook_signature(body, signature):
             raise HTTPException(status_code=400, detail="Invalid webhook signature")
         
-        # Parse the webhook data
-        event_data = await request.json()
+        # Convert the validated webhook data to dict for processing
+        event_data = webhook_data.dict()
         
         # Process the webhook
         success = lemonsqueezy_service.process_webhook(db, event_data)

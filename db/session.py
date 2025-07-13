@@ -23,7 +23,11 @@ try:
         max_overflow=10,
         pool_timeout=30,
         pool_recycle=1800,
-        pool_pre_ping=True  # Enable connection health checks
+        pool_pre_ping=True,  # Enable connection health checks
+        connect_args={
+            "connect_timeout": 10,  # 10 second connection timeout
+            "application_name": "jasper_gateway"
+        }
     )
     logger.info("Database engine created successfully")
 except Exception as e:

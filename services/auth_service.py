@@ -7,12 +7,14 @@ from typing import Optional
 from utils.email import send_email_async
 from core.config import settings
 from services.voice_service import VoiceService
+from services.credit_service import CreditService
 from clients.fal import FalModels
 from workers.audio_generation.enums import SilencingStrategies
 import random, string
 import httpx
 from datetime import datetime, timezone, timedelta
 import logging
+from core.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -65,6 +67,19 @@ def register_user(db: Session, user_in: UserCreate):
     except Exception as e:
         logger.error(f"Failed to create default config for user {user.id}: {str(e)}")
         # Don't fail user registration if config creation fails
+    
+    # Add default credits to the new user
+    try:
+        CreditService.add_credit(
+            db, 
+            user.id, 
+            settings.DEFAULT_USER_CREDITS,
+            f"Welcome bonus - New user registration"
+        )
+        logger.info(f"Successfully added {settings.DEFAULT_USER_CREDITS} default credits for user {user.id}")
+    except Exception as e:
+        logger.error(f"Failed to add default credits for user {user.id}: {str(e)}")
+        # Don't fail user registration if credit addition fails
     
     # Generate and send verification code
     code = ''.join(random.choices(string.digits, k=6))
@@ -155,6 +170,19 @@ def get_or_create_user_by_google_oauth(db: Session, code: str, redirect_uri: str
         except Exception as e:
             logger.error(f"Failed to create default config for OAuth user {user.id}: {str(e)}")
             # Don't fail OAuth user creation if config creation fails
+        
+        # Add default credits to the new OAuth user
+        try:
+            CreditService.add_credit(
+                db, 
+                user.id, 
+                settings.DEFAULT_USER_CREDITS,
+                f"Welcome bonus - OAuth user registration"
+            )
+            logger.info(f"Successfully added {settings.DEFAULT_USER_CREDITS} default credits for OAuth user {user.id}")
+        except Exception as e:
+            logger.error(f"Failed to add default credits for OAuth user {user.id}: {str(e)}")
+            # Don't fail OAuth user creation if credit addition fails
     # Find or create OAuthAccount
     oauth = db.query(OAuthAccount).filter_by(user_id=user.id, provider="google").first()
     if not oauth:

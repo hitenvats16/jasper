@@ -44,6 +44,12 @@ class LemonSqueezyService:
     ) -> CheckoutSessionResponse:
         """Create a checkout session for a plan"""
         try:
+            # Validate required settings
+            if not self.api_key:
+                raise ValueError("LEMON_SQUEEZY_API_KEY is not configured")
+            if not self.store_id:
+                raise ValueError("LEMON_SQUEEZY_STORE_ID is not configured")
+            
             # Get the plan
             plan = db.query(PaymentPlan).filter(
                 PaymentPlan.id == request.plan_id,
@@ -52,18 +58,21 @@ class LemonSqueezyService:
             ).first()
             
             if not plan:
-                raise ValueError("Plan not found or inactive")
+                raise ValueError(f"Plan with ID {request.plan_id} not found or inactive")
+            
+            if not plan.lemon_squeezy_variant_id:
+                raise ValueError(f"Plan {plan.name} has no LemonSqueezy variant ID configured")
+            
+            logger.info(f"Creating checkout session for plan: {plan.name} (ID: {plan.id}, Variant: {plan.lemon_squeezy_variant_id})")
             
             # Prepare checkout data
             checkout_data = {
                 "data": {
                     "type": "checkouts",
                     "attributes": {
-                        "store_id": int(self.store_id),
-                        "variant_id": int(plan.lemon_squeezy_variant_id),
                         "custom_price": None,
                         "product_options": {
-                            "enabled": True,
+                            "enabled_variants": [int(plan.lemon_squeezy_variant_id)],
                             "redirect_url": request.success_url,
                             "receipt_button_text": "Continue to Jasper",
                             "receipt_link_url": request.success_url
@@ -76,27 +85,67 @@ class LemonSqueezyService:
                         "checkout_data": {
                             "email": user.email,
                             "custom": {
-                                "user_id": user.id,
-                                "plan_id": plan.id,
-                                "plan_type": plan.plan_type.value,
-                                "credits": plan.credits,
-                                **(request.custom_data or {})
+                                "user_id": str(user.id),
+                                "plan_id": str(plan.id),
+                                "plan_type": str(plan.plan_type.value),
+                                "credits": str(plan.credits),
+                                **{k: str(v) for k, v in (request.custom_data or {}).items()}
+                            }
+                        }
+                    },
+                    "relationships": {
+                        "store": {
+                            "data": {
+                                "type": "stores",
+                                "id": str(self.store_id)
+                            }
+                        },
+                        "variant": {
+                            "data": {
+                                "type": "variants",
+                                "id": str(plan.lemon_squeezy_variant_id)
                             }
                         }
                     }
                 }
             }
-            
+
+            # Use correct headers for LemonSqueezy API
+            headers = {
+                "Authorization": f"Bearer {self.api_key}",
+                "Accept": "application/vnd.api+json",
+                "Content-Type": "application/vnd.api+json"
+            }
+
+            logger.info(f"Checkout data prepared: {json.dumps(checkout_data, indent=2)}")
+
             # Create checkout session
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(
                     f"{self.base_url}/checkouts",
-                    headers=self._get_headers(),
+                    headers=headers,
                     json=checkout_data
                 )
-                response.raise_for_status()
+                
+                logger.info(f"LemonSqueezy API response status: {response.status_code}")
+                
+                if response.status_code != 201:  # LemonSqueezy returns 201 for created checkout
+                    error_detail = f"LemonSqueezy API error: {response.status_code}"
+                    try:
+                        error_data = response.json()
+                        if "errors" in error_data:
+                            error_detail += f" - {error_data['errors']}"
+                        elif "message" in error_data:
+                            error_detail += f" - {error_data['message']}"
+                    except:
+                        error_detail += f" - {response.text}"
+                    
+                    logger.error(f"Checkout session creation failed: {error_detail}")
+                    raise ValueError(error_detail)
                 
                 data = response.json()
+                logger.info(f"Checkout session created successfully: {data}")
+                
                 checkout_url = data["data"]["attributes"]["url"]
                 session_id = data["data"]["id"]
                 
@@ -105,14 +154,31 @@ class LemonSqueezyService:
                     session_id=session_id
                 )
                 
-        except Exception as e:
-            logger.error(f"Failed to create checkout session: {str(e)}")
+        except ValueError as e:
+            # Re-raise ValueError as-is (these are validation errors)
+            logger.error(f"Validation error in checkout session creation: {str(e)}")
             raise
+        except httpx.TimeoutException:
+            error_msg = "LemonSqueezy API request timed out"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        except httpx.RequestError as e:
+            error_msg = f"Network error connecting to LemonSqueezy API: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
+        except Exception as e:
+            error_msg = f"Unexpected error creating checkout session: {str(e)}"
+            logger.error(error_msg)
+            raise ValueError(error_msg)
     
     def verify_webhook_signature(self, payload: bytes, signature: str) -> bool:
         """Verify webhook signature"""
         if not self.webhook_secret:
             logger.warning("No webhook secret configured, skipping signature verification")
+            return True
+        
+        if not signature:
+            logger.warning("No signature provided, skipping signature verification")
             return True
             
         expected_signature = hmac.new(
@@ -126,15 +192,31 @@ class LemonSqueezyService:
     def process_webhook(self, db: Session, event_data: Dict[str, Any]) -> bool:
         """Process LemonSqueezy webhook events"""
         try:
-            event_type = event_data.get("meta", {}).get("event_name")
-            data = event_data.get("data", {})
+            # Handle both new and old webhook structures
+            event_type = None
+            data = None
+            
+            # Check for event_name in meta (new structure)
+            if "meta" in event_data and "event_name" in event_data["meta"]:
+                event_type = event_data["meta"]["event_name"]
+                data = event_data.get("data", {})
+            # Fallback to old structure
+            elif "event_name" in event_data:
+                event_type = event_data["event_name"]
+                data = event_data.get("data", {})
+            
+            if not event_type:
+                logger.error("No event_name found in webhook data")
+                logger.error(f"Webhook data keys: {list(event_data.keys())}")
+                return False
             
             logger.info(f"Processing webhook event: {event_type}")
-            
+            logger.info(f"Webhook data structure: {list(event_data.keys())}")
+            print(event_data)
             if event_type == "order_created":
-                return self._handle_order_created(db, data)
+                return self._handle_order_created(db, event_data)
             elif event_type == "order_updated":
-                return self._handle_order_updated(db, data)
+                return self._handle_order_updated(db, event_data)
             # Removed subscription webhook handlers - only one-time payments supported
             else:
                 logger.info(f"Unhandled webhook event: {event_type}")
@@ -142,20 +224,46 @@ class LemonSqueezyService:
                 
         except Exception as e:
             logger.error(f"Failed to process webhook: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
-    def _handle_order_created(self, db: Session, data: Dict[str, Any]) -> bool:
+    def _handle_order_created(self, db: Session, event_data: Dict[str, Any]) -> bool:
         """Handle order_created webhook"""
         try:
+            # Extract data from the new webhook structure
+            data = event_data.get("data", {})
+            meta = event_data.get("meta", {})
             attributes = data.get("attributes", {})
-            custom_data = attributes.get("custom_data", {})
             
-            user_id = custom_data.get("user_id")
-            plan_id = custom_data.get("plan_id")
+            # Get custom_data from meta (new structure)
+            custom_data = meta.get("custom_data", {})
             
-            if not user_id or not plan_id:
-                logger.error("Missing user_id or plan_id in order data")
+            if not custom_data:
+                logger.error("No custom_data found in webhook meta")
                 return False
+            
+            # Extract and validate user_id and plan_id with proper type conversion
+            user_id_raw = custom_data.get("user_id")
+            plan_id_raw = custom_data.get("plan_id")
+            
+            if user_id_raw is None or plan_id_raw is None:
+                logger.error(f"Missing user_id or plan_id in custom_data: user_id={user_id_raw}, plan_id={plan_id_raw}")
+                return False
+            
+            # Convert to integers, handling both string and int inputs
+            try:
+                user_id = int(user_id_raw) if user_id_raw is not None else None
+                plan_id = int(plan_id_raw) if plan_id_raw is not None else None
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid user_id or plan_id format: user_id={user_id_raw}, plan_id={plan_id_raw}, error={str(e)}")
+                return False
+            
+            if user_id is None or plan_id is None:
+                logger.error(f"Failed to convert user_id or plan_id to integer: user_id={user_id}, plan_id={plan_id}")
+                return False
+            
+            logger.info(f"Processing order_created webhook: user_id={user_id}, plan_id={plan_id}")
             
             # Get the plan
             plan = db.query(PaymentPlan).filter(
@@ -167,36 +275,63 @@ class LemonSqueezyService:
                 logger.error(f"Plan {plan_id} not found")
                 return False
             
+            # Convert amount from cents to dollars, handling None values
+            total_cents = attributes.get("total")
+            if total_cents is None:
+                logger.error("No total amount found in webhook attributes")
+                return False
+            
+            try:
+                amount = float(total_cents) / 100  # Convert from cents
+            except (ValueError, TypeError) as e:
+                logger.error(f"Invalid total amount format: {total_cents}, error={str(e)}")
+                return False
+            
             # Create payment record
             payment = Payment(
                 user_id=user_id,
                 plan_id=plan_id,
                 lemon_squeezy_order_id=data["id"],
                 lemon_squeezy_order_number=attributes.get("order_number"),
-                amount=float(attributes.get("total", 0)) / 100,  # Convert from cents
+                amount=amount,
                 currency=attributes.get("currency", "USD"),
                 status=PaymentStatus.PENDING,
                 credits_added=plan.credits,
-                payment_metadata=data
+                payment_metadata=event_data
             )
             
             db.add(payment)
             db.commit()
             db.refresh(payment)
+
+            # Add credits to user
+            CreditService.add_credit(
+                db, 
+                user_id, 
+                float(plan.credits),
+                f"Payment for {plan.name} - Order {data['id']}"
+            )
             
-            logger.info(f"Created payment record for order {data['id']}")
+            logger.info(f"Created payment record for order {data['id']}: payment_id={payment.id}, amount=${amount}, credits={plan.credits}")
             return True
             
         except Exception as e:
             logger.error(f"Failed to handle order_created: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
-    def _handle_order_updated(self, db: Session, data: Dict[str, Any]) -> bool:
+    def _handle_order_updated(self, db: Session, event_data: Dict[str, Any]) -> bool:
         """Handle order_updated webhook"""
         try:
-            order_id = data["id"]
+            # Extract data from the new webhook structure
+            data = event_data.get("data", {})
             attributes = data.get("attributes", {})
+            
+            order_id = data["id"]
             status = attributes.get("status")
+            
+            logger.info(f"Processing order_updated webhook for order {order_id} with status: {status}")
             
             # Find the payment
             payment = db.query(Payment).filter(
@@ -212,23 +347,34 @@ class LemonSqueezyService:
             if status == "paid":
                 payment.status = PaymentStatus.COMPLETED
                 # Add credits to user
-                CreditService.add_credit(
-                    db, 
-                    payment.user_id, 
-                    float(payment.credits_added),
-                    f"Payment for {payment.plan.name} - Order {order_id}"
-                )
-                logger.info(f"Payment completed and credits added for order {order_id}")
+                try:
+                    CreditService.add_credit(
+                        db, 
+                        payment.user_id, 
+                        float(payment.credits_added),
+                        f"Payment for {payment.plan.name} - Order {order_id}"
+                    )
+                    logger.info(f"Payment completed and credits added for order {order_id}. Credits added: {payment.credits_added}")
+                except Exception as e:
+                    logger.error(f"Failed to add credits for order {order_id}: {str(e)}")
+                    # Don't fail the webhook processing if credit addition fails
             elif status == "failed":
                 payment.status = PaymentStatus.FAILED
                 logger.info(f"Payment failed for order {order_id}")
+            elif status == "pending":
+                payment.status = PaymentStatus.PENDING
+                logger.info(f"Payment status updated to pending for order {order_id}")
+            else:
+                logger.info(f"Payment status updated to {status} for order {order_id}")
             
-            payment.payment_metadata = data
+            payment.payment_metadata = event_data
             db.commit()
             return True
             
         except Exception as e:
             logger.error(f"Failed to handle order_updated: {str(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             return False
     
     # Removed subscription handler methods - only one-time payments supported
@@ -341,7 +487,7 @@ class LemonSqueezyService:
             page = 1
             
             while True:
-                async with httpx.AsyncClient() as client:
+                async with httpx.AsyncClient(timeout=30.0) as client:  # 30 second timeout
                     response = await client.get(
                         f"{self.base_url}/products",
                         headers=self._get_headers(),
@@ -478,7 +624,7 @@ class LemonSqueezyService:
     async def _fetch_product_variants(self, product_id: str) -> List[Dict[str, Any]]:
         """Fetch variants for a specific product"""
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.get(
                     f"{self.base_url}/products/{product_id}/variants",
                     headers=self._get_headers()

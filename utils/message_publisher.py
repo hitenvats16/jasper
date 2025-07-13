@@ -54,13 +54,18 @@ class MessagePublisher:
 message_publisher = MessagePublisher()
 
 def get_rabbitmq_connection():
-    """Create and return a RabbitMQ connection using connection URL"""
+    """Create and return a RabbitMQ connection using connection URL with timeout"""
     try:
         # Example URL format: amqp://username:password@hostname:port/vhost
         connection_url = settings.RABBITMQ_URL
         parameters = pika.URLParameters(
             url=connection_url,
         )
+        # Add timeout settings
+        parameters.socket_timeout = 10.0  # 10 second timeout
+        parameters.connection_attempts = 3  # Retry 3 times
+        parameters.retry_delay = 1.0  # 1 second between retries
+        
         return pika.BlockingConnection(parameters)
     except Exception as e:
         logger.error(f"Failed to create RabbitMQ connection: {str(e)}")

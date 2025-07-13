@@ -115,6 +115,10 @@ class CheckoutSessionResponse(BaseModel):
     session_id: str
 
 # Webhook Schemas
+class WebhookContent(BaseModel):
+    meta: Dict[str, Any]
+    data: Dict[str, Any]
+
 class LemonSqueezyWebhookData(BaseModel):
     id: str
     type: str

@@ -59,6 +59,9 @@ LEMON_SQUEEZY_API_KEY=your-lemonsqueezy-api-key
 LEMON_SQUEEZY_WEBHOOK_SECRET=your-lemonsqueezy-webhook-secret
 LEMON_SQUEEZY_STORE_ID=your-store-id
 
+# Credit System
+DEFAULT_USER_CREDITS=1000.0
+
 # AWS S3
 AWS_ACCESS_KEY_ID=your-aws-access-key
 AWS_SECRET_ACCESS_KEY=your-aws-secret-key
