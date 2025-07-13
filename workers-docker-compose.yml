@@ -9,7 +9,8 @@ services:
       - .env
     environment:
       - APP_NAME=worker:text_parser_and_extractor
-    network_mode: host
+    networks:
+      - jasper-network
     restart: unless-stopped
     deploy:
       replicas: 5
@@ -22,7 +23,8 @@ services:
       - .env
     environment:
       - APP_NAME=worker:voice_processor
-    network_mode: host
+    networks:
+      - jasper-network
     restart: unless-stopped
     deploy:
       replicas: 5
@@ -35,7 +37,8 @@ services:
       - .env
     environment:
       - APP_NAME=worker:voice_generator
-    network_mode: host
+    networks:
+      - jasper-network
     restart: unless-stopped
     deploy:
       replicas: 5
