@@ -18,7 +18,6 @@ RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt || \
 COPY . /code
 
 ENV PORT=8000
-ENV APP_NAME=gateway
 
 EXPOSE 8000
 

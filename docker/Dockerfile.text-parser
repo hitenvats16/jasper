@@ -17,6 +17,4 @@ RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt || \
 
 COPY . /code
 
-ENV APP_NAME=worker:text_parser_and_extractor
-
 CMD ["python", "-m", "workers.text_parser_and_extractor.main"] 

@@ -18,6 +18,4 @@ RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt || \
 
 COPY . /code
 
-ENV APP_NAME=worker:voice_processor
-
 CMD ["python", "-m", "workers.voice_processor.main"] 

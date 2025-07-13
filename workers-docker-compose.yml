@@ -7,8 +7,6 @@ services:
       dockerfile: docker/Dockerfile.text-parser
     env_file:
       - .env
-    environment:
-      - APP_NAME=worker:text_parser_and_extractor
     networks:
       - jasper-network
     restart: unless-stopped
@@ -21,8 +19,6 @@ services:
       dockerfile: docker/Dockerfile.voice-processor
     env_file:
       - .env
-    environment:
-      - APP_NAME=worker:voice_processor
     networks:
       - jasper-network
     restart: unless-stopped
@@ -35,8 +31,6 @@ services:
       dockerfile: docker/Dockerfile.audio-generator
     env_file:
       - .env
-    environment:
-      - APP_NAME=worker:voice_generator
     networks:
       - jasper-network
     restart: unless-stopped
