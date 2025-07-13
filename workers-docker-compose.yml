@@ -1,42 +1,50 @@
 version: '3.8'
 
+x-text-parser-base: &text-parser-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.text-parser
+  env_file:
+    - .env
+  network_mode: host
+  restart: unless-stopped
+
+x-voice-processor-base: &voice-processor-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.voice-processor
+  env_file:
+    - .env
+  network_mode: host
+  restart: unless-stopped
+
+x-audio-generator-base: &audio-generator-base
+  build:
+    context: .
+    dockerfile: docker/Dockerfile.audio-generator
+  env_file:
+    - .env
+  network_mode: host
+  restart: unless-stopped
+
 services:
-  text-parser:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.text-parser
-    env_file:
-      - .env
-    networks:
-      - jasper-network
-    restart: unless-stopped
-    deploy:
-      replicas: 5
+  # Text Parser instances
+  text-parser-1: *text-parser-base
+  text-parser-2: *text-parser-base
+  text-parser-3: *text-parser-base
+  text-parser-4: *text-parser-base
+  text-parser-5: *text-parser-base
 
-  voice-processor:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.voice-processor
-    env_file:
-      - .env
-    networks:
-      - jasper-network
-    restart: unless-stopped
-    deploy:
-      replicas: 5
+  # Voice Processor instances
+  voice-processor-1: *voice-processor-base
+  voice-processor-2: *voice-processor-base
+  voice-processor-3: *voice-processor-base
+  voice-processor-4: *voice-processor-base
+  voice-processor-5: *voice-processor-base
 
-  audio-generator:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.audio-generator
-    env_file:
-      - .env
-    networks:
-      - jasper-network
-    restart: unless-stopped
-    deploy:
-      replicas: 5
-
-networks:
-  jasper-network:
-    driver: bridge 
+  # Audio Generator instances
+  audio-generator-1: *audio-generator-base
+  audio-generator-2: *audio-generator-base
+  audio-generator-3: *audio-generator-base
+  audio-generator-4: *audio-generator-base
+  audio-generator-5: *audio-generator-base 
