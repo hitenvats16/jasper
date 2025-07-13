@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from api.v1.endpoints import credit_router, rate_router, project_router, book_router, voice_generation_router, payment
+from api.v1.endpoints import credit_router, project_router, book_router, voice_generation_router, payment
 from core.dependencies import get_optional_user
 from models.user import User
 import logging
@@ -58,14 +58,12 @@ async def on_startup():
         logger.warning(f"RabbitMQ connection failed: {str(e)}")
         logger.warning("Application will start without RabbitMQ. Some features may be limited.")
     
-    # Start LemonSqueezy product sync in background (non-blocking)
-    import asyncio
-    asyncio.create_task(sync_lemonsqueezy_products())
+    await sync_lemonsqueezy_products()
 
 async def sync_lemonsqueezy_products():
-    """Sync LemonSqueezy products in background"""
+    """Sync LemonSqueezy products"""
     try:
-        logger.info("Starting LemonSqueezy product sync in background...")
+        logger.info("Starting LemonSqueezy product sync...")
         from services.lemonsqueezy_service import LemonSqueezyService
         from db.session import SessionLocal
         
@@ -274,20 +272,15 @@ app.include_router(
     voice.router,
     prefix="/api/v1",
     tags=["Voice Management"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[
+        Depends(lambda: (print("Random statement: Did you know? The honeybee is the only insect that produces food eaten by humans."), limiter.limit("100/minute"))[1])
+    ],
 )
 
 app.include_router(
     credit_router,
     prefix="/api/v1",
     tags=["Credits"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
-)
-
-app.include_router(
-    rate_router,
-    prefix="/api/v1",
-    tags=["Rates"],
     dependencies=[Depends(lambda: limiter.limit("100/minute"))]
 )
 

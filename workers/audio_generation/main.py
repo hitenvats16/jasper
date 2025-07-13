@@ -22,6 +22,8 @@ from workers.audio_generation.generator import AudiobookGenerator
 from workers.audio_generation.silence import create_silence_strategy
 from workers.audio_generation.splitter import QuoteAwareTTSTextSplittingStrategy
 from workers.audio_generation.tts import ChatterboxAudioStrategy
+from services.credit_service import CreditService
+from services.voice_generation_service import VoiceGenerationService
 
 # Configure logging
 logging.basicConfig(
@@ -41,7 +43,6 @@ class AudioGenerator(BaseWorker):
         logger.info(
             f"Initializing AudioGenerator with queue: {settings.VOICE_GENERATION_QUEUE}"
         )
-        self.db = SessionLocal()
 
         super().__init__(settings.VOICE_GENERATION_QUEUE)
 
@@ -53,6 +54,7 @@ class AudioGenerator(BaseWorker):
         book: Book,
         voice: Voice = None,
         audio_generation_params: dict = None,
+        db: Session = None,
     ):
         """Generate audio for a specific chapter"""
         chapter_id = chapter_data.get("chapter_id")
@@ -60,16 +62,19 @@ class AudioGenerator(BaseWorker):
         chapter_content = chapter_data.get("chapter_content")
         meta_data = chapter_data.get("meta_data", {})
 
-        config = self.db.query(Config).filter(Config.user_id == user.id).first()
+        config = db.query(Config).filter(Config.user_id == user.id).first()
 
         # Note: Pick tts model dynamically based on the user's config later
         tts_model = ChatterboxAudioStrategy()
 
         # Use default silence strategy if config is not available
         if config and config.silence_strategy:
-            silence_strategy = create_silence_strategy(config.silence_strategy, config.silence_data or {})
+            silence_strategy = create_silence_strategy(
+                config.silence_strategy, config.silence_data or {}
+            )
         else:
             from workers.audio_generation.silence import AdaptiveSilenceStrategy
+
             silence_strategy = AdaptiveSilenceStrategy()
 
         audiobook_generator = AudiobookGenerator(
@@ -87,12 +92,13 @@ class AudioGenerator(BaseWorker):
                 "exaggeration": params.get("exaggeration", 0.65),
                 "temperature": params.get("temperature", 0.7),
                 "cfg": params.get("cfg", 0.1),
-                "seed": params.get("seed", 989443),  # Deterministic seed based on chapter ID
+                "seed": params.get(
+                    "seed", 989443
+                ),  # Deterministic seed based on chapter ID
             }
 
             # If voice_id is provided, try to get voice prompt
             if voice:
-                db = SessionLocal()
                 try:
                     voice = (
                         db.query(Voice)
@@ -104,8 +110,6 @@ class AudioGenerator(BaseWorker):
                         logger.info(f"Using voice sample for chapter {chapter_id}")
                 except Exception as e:
                     logger.warning(f"Failed to load voice sample: {str(e)}")
-                finally:
-                    db.close()
 
             # Generate audio
             buffer = audiobook_generator.generate(
@@ -147,6 +151,7 @@ class AudioGenerator(BaseWorker):
         book_id = job_data.get("book_id")
         voice_id = job_data.get("voice_id")
         audio_generation_params = job_data.get("audio_generation_params", {})
+        db = SessionLocal()
 
         if not job_id or not user_id or not book_id:
             logger.error(f"Invalid message format: {job_data}")
@@ -161,17 +166,45 @@ class AudioGenerator(BaseWorker):
             .filter(BookVoiceProcessingJob.id == int(job_id))
             .first()
         )
+
+        # Estimate job cost
+        job_estimate = VoiceGenerationService.estimate_job_cost(
+            db=self.db, chapters=job.data, user_id=user_id
+        )
+        print(
+            f"Job estimate: {job_estimate} for user {user_id} and book {book_id}"
+        )
+        # Check if user can afford job
+        if not VoiceGenerationService.can_user_afford_job(
+            db=self.db, job_estimate=job_estimate, user_id=user_id
+        ):
+            # update job status to failed
+            self.update_job_status(
+                job_id,
+                "FAILED",
+                {
+                    "error": "Insufficient credits to start voice generation job",
+                },
+                db=db,
+            )
+            return
+        
+        # Prepare job data
         user = self.db.query(User).filter(User.id == int(user_id)).first()
         book = self.db.query(Book).filter(Book.id == int(book_id)).first()
         voice = (
-            self.db.query(Voice)
-            .filter(
-                Voice.id == voice_id,
-                Voice.is_deleted == False,
-                Voice.user_id == user_id,
+            (
+                self.db.query(Voice)
+                .filter(
+                    Voice.id == voice_id,
+                    Voice.is_deleted == False,
+                    Voice.user_id == user_id,
+                )
+                .first()
             )
-            .first()
-        ) if voice_id else None
+            if voice_id
+            else None
+        )
 
         if not job or not user or not book:
             logger.error(f"Job {job_id} not found")
@@ -206,6 +239,7 @@ class AudioGenerator(BaseWorker):
                         book=book,
                         voice=voice,
                         audio_generation_params=audio_generation_params,
+                        db=db,
                     )
 
                     # Create processed chunk record
@@ -224,6 +258,7 @@ class AudioGenerator(BaseWorker):
                             "processing_time": datetime.utcnow().isoformat(),
                         },
                         type=ProcessedVoiceChunksType.PARTIAL_AUDIO,
+                        db=db,
                     )
 
                     processed_chapters += 1
@@ -250,6 +285,7 @@ class AudioGenerator(BaseWorker):
                         "failed_chapters": failed_chapters,
                         "total_chapters": len(job.data),
                     },
+                    db=db,
                 )
                 logger.info(f"Successfully completed voice generation job {job_id}")
             else:
@@ -262,6 +298,14 @@ class AudioGenerator(BaseWorker):
                         "failed_chapters": failed_chapters,
                         "total_chapters": len(job.data),
                     },
+                    db=db,
+                )
+                # Deduct credits from user
+                CreditService.deduct_credit(
+                    db=self.db,
+                    user_id=user_id,
+                    amount=job.credit_takes,
+                    description=f"Voice generation job completed",
                 )
                 logger.warning(
                     f"Completed voice generation job {job_id} with {failed_chapters} failed chapters"
@@ -282,19 +326,22 @@ class AudioGenerator(BaseWorker):
                         failed_chapters if "failed_chapters" in locals() else 0
                     ),
                 },
+                db=db,
             )
 
-    def update_job_status(self, job_id: int, status: str, result: dict = None):
+    def update_job_status(
+        self, job_id: int, status: str, result: dict = None, db: Session = None
+    ):
         """Update job status via API"""
         try:
             job = (
-                self.db.query(BookVoiceProcessingJob)
+                db.query(BookVoiceProcessingJob)
                 .filter(BookVoiceProcessingJob.id == job_id)
                 .first()
             )
             if job:
                 job.status = status
-                self.db.commit()
+                db.commit()
                 logger.info(f"Updated job {job_id} status to {status}")
             else:
                 logger.warning(f"Job {job_id} not found")
@@ -311,7 +358,8 @@ class AudioGenerator(BaseWorker):
         s3_key: str,
         index: int,
         type: ProcessedVoiceChunksType,
-        data: dict = {}
+        data: dict = {},
+        db: Session = None,
     ):
         """Create processed chunk record via API"""
         try:
@@ -325,8 +373,8 @@ class AudioGenerator(BaseWorker):
                 data=data,
                 type=type,
             )
-            self.db.add(processed_chunk)
-            self.db.commit()
+            db.add(processed_chunk)
+            db.commit()
             logger.info(f"Created processed chunk for chapter {chapter_id}")
             return processed_chunk
         except Exception as e:

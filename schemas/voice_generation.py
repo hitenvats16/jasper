@@ -37,3 +37,8 @@ class ProcessedVoiceChunkResponse(BaseModel):
 
     class Config:
         from_attributes = True 
+
+class VoiceGenerationEstimateResponse(BaseModel):
+    total_tokens: int
+    total_cost: float
+    can_afford: bool

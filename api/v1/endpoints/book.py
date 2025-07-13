@@ -73,7 +73,16 @@ async def create_book(
         )
     # Create book in database
     book = BookService.create_book(db, current_user.id, book_data, s3_key)
-    create_book_processing_job(book)
+    
+    # Create processing job asynchronously to avoid session issues
+    try:
+        create_book_processing_job(book.id)
+    except Exception as e:
+        # Log the error but don't fail the book creation
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(f"Failed to create processing job for book {book.id}: {str(e)}")
+    
     return book
 
 

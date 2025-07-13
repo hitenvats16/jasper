@@ -8,6 +8,7 @@ from utils.email import send_email_async
 from core.config import settings
 from services.voice_service import VoiceService
 from services.credit_service import CreditService
+from models.rate import Rate
 from clients.fal import FalModels
 from workers.audio_generation.enums import SilencingStrategies
 import random, string
@@ -80,6 +81,19 @@ def register_user(db: Session, user_in: UserCreate):
     except Exception as e:
         logger.error(f"Failed to add default credits for user {user.id}: {str(e)}")
         # Don't fail user registration if credit addition fails
+    
+    # Create default rate for the new user
+    try:
+        rate = Rate(
+            user_id=user.id,
+            values=settings.DEFAULT_PER_TOKEN_RATE
+        )
+        db.add(rate)
+        db.commit()
+        logger.info(f"Successfully created default rate for user {user.id}: {settings.DEFAULT_PER_TOKEN_RATE}")
+    except Exception as e:
+        logger.error(f"Failed to create default rate for user {user.id}: {str(e)}")
+        # Don't fail user registration if rate creation fails
     
     # Generate and send verification code
     code = ''.join(random.choices(string.digits, k=6))
@@ -183,6 +197,19 @@ def get_or_create_user_by_google_oauth(db: Session, code: str, redirect_uri: str
         except Exception as e:
             logger.error(f"Failed to add default credits for OAuth user {user.id}: {str(e)}")
             # Don't fail OAuth user creation if credit addition fails
+        
+        # Create default rate for the new OAuth user
+        try:
+            rate = Rate(
+                user_id=user.id,
+                values=settings.DEFAULT_PER_TOKEN_RATE
+            )
+            db.add(rate)
+            db.commit()
+            logger.info(f"Successfully created default rate for OAuth user {user.id}: {settings.DEFAULT_PER_TOKEN_RATE}")
+        except Exception as e:
+            logger.error(f"Failed to create default rate for OAuth user {user.id}: {str(e)}")
+            # Don't fail OAuth user creation if rate creation fails
     # Find or create OAuthAccount
     oauth = db.query(OAuthAccount).filter_by(user_id=user.id, provider="google").first()
     if not oauth:

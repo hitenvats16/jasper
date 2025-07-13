@@ -11,6 +11,9 @@ import json
 import logging
 from utils.message_publisher import publish_message
 from core.config import settings
+from services.rate_service import RateService
+from utils.text import count_tokens
+from services.credit_service import CreditService
 
 logger = logging.getLogger(__name__)
 
@@ -22,21 +25,20 @@ class VoiceGenerationService:
         request: VoiceGenerationRequest
     ) -> BookVoiceProcessingJob:
         """Create a new voice generation job for the given chapters"""
-        
+        print(f"Creating voice generation job for user {user_id} and book {request.book_id}")
         # Verify the book belongs to the user
         book = db.query(Book).filter(
             Book.id == request.book_id,
             Book.user_id == user_id,
             Book.is_deleted == False
         ).first()
-        
+
         if not book:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Book not found or access denied"
             )
         
-        # Prepare job data
         job_data = [chapter.model_dump() for chapter in request.chapters]
         
         # Create the job
@@ -85,6 +87,32 @@ class VoiceGenerationService:
             )
         
         return job
+    
+    @staticmethod
+    def estimate_job_cost(db: Session, chapters: List[ChapterData], user_id: int) -> float:
+        """Estimate the cost of a voice generation job"""
+        rate = RateService.get_user_rate_value(db=db, user_id=user_id)
+        total_tokens = 0
+        for chapter in chapters:
+            total_tokens += count_tokens(chapter.chapter_content)
+        return {
+            "total_tokens": total_tokens,
+            "total_cost": total_tokens * rate
+        }
+    
+    @staticmethod
+    def can_user_afford_job(db: Session, job_estimate: dict, user_id: int) -> bool:
+        """Check if a user can afford a voice generation job"""
+        user_credit = RateService.get_user_rate_value(db=db, user_id=user_id)
+
+        # Get processing or in queue jobs and sum up credits
+        processing_jobs = db.query(BookVoiceProcessingJob).filter(
+            BookVoiceProcessingJob.user_id == user_id,
+            BookVoiceProcessingJob.status.in_([JobStatus.PROCESSING, JobStatus.QUEUED])
+        ).all()
+
+        total_credits = sum([job.credit_takes for job in processing_jobs]) + job_estimate["total_cost"]
+        return user_credit >= total_credits
     
     @staticmethod
     def get_job_status(db: Session, job_id: int, user_id: int) -> Optional[BookVoiceProcessingJob]:

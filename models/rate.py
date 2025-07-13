@@ -1,13 +1,14 @@
-from sqlalchemy import Column, Integer, String, Float, Boolean, JSON
+from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey
+from sqlalchemy.orm import relationship
 from db.session import Base
+from core.config import settings
 
 class Rate(Base):
     __tablename__ = "rate"
     id = Column(Integer, primary_key=True, index=True)
-    slug = Column(String, unique=True, nullable=False)
-    name = Column(String, nullable=False)
-    flags = Column(JSON, nullable=True)  # e.g. {"premium": true, "discount": false}
-    rate = Column(Float, nullable=False)  # price per unit (e.g. per minute, per job, etc)
-    currency = Column(String, default="USD", nullable=False)
-    description = Column(String, nullable=True)
-    is_deleted = Column(Boolean, default=False) 
+    user_id = Column(Integer, ForeignKey("user.id"), nullable=False, unique=True)
+    values = Column(Float, nullable=False, default=settings.DEFAULT_PER_TOKEN_RATE)
+    is_deleted = Column(Boolean, default=False)
+    
+    # Relationship with User
+    user = relationship("User", back_populates="rate") 

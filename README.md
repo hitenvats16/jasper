@@ -62,6 +62,9 @@ LEMON_SQUEEZY_STORE_ID=your-store-id
 # Credit System
 DEFAULT_USER_CREDITS=1000.0
 
+# Rate System
+DEFAULT_PER_TOKEN_RATE=0.0067
+
 # AWS S3
 AWS_ACCESS_KEY_ID=your-aws-access-key
 AWS_SECRET_ACCESS_KEY=your-aws-secret-key

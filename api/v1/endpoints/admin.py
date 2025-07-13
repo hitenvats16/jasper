@@ -277,3 +277,44 @@ def delete_default_voice(
     db.commit()
     
     logger.info(f"Admin {current_user.id} deleted default voice {voice_id}") 
+
+@router.get("/memory/stats", summary="Get memory statistics (Admin only)")
+def get_memory_stats(
+    current_user: User = Depends(require_admin)
+):
+    """Get current memory usage statistics"""
+    try:
+        from utils.memory_monitor import get_memory_stats
+        return get_memory_stats()
+    except Exception as e:
+        logger.error(f"Failed to get memory stats: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to get memory statistics")
+
+@router.post("/memory/gc", summary="Force garbage collection (Admin only)")
+def force_garbage_collection(
+    current_user: User = Depends(require_admin)
+):
+    """Force garbage collection and return results"""
+    try:
+        from utils.memory_monitor import force_gc
+        result = force_gc()
+        return {
+            "message": "Garbage collection completed",
+            "result": result
+        }
+    except Exception as e:
+        logger.error(f"Failed to force garbage collection: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to perform garbage collection")
+
+@router.post("/memory/cleanup", summary="Clean up resources (Admin only)")
+def cleanup_resources(
+    current_user: User = Depends(require_admin)
+):
+    """Perform general resource cleanup"""
+    try:
+        from utils.memory_monitor import cleanup_resources
+        cleanup_resources()
+        return {"message": "Resource cleanup completed"}
+    except Exception as e:
+        logger.error(f"Failed to cleanup resources: {str(e)}")
+        raise HTTPException(status_code=500, detail="Failed to cleanup resources") 

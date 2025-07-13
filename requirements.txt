@@ -31,3 +31,5 @@ langchain-core
 PyMuPDF
 spacy
 numpy<2
+tiktoken
+psutil

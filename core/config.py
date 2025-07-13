@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     LEMON_SQUEEZY_API_KEY: Optional[str] = None
     LEMON_SQUEEZY_WEBHOOK_SECRET: Optional[str] = None
     LEMON_SQUEEZY_STORE_ID: Optional[str] = None
+
+    DEFAULT_PER_TOKEN_RATE: Optional[float] = 0.0067
     
     # Credit settings
     DEFAULT_USER_CREDITS: float = 1000.0

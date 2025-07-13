@@ -8,7 +8,8 @@ from services.voice_generation_service import VoiceGenerationService
 from schemas.voice_generation import (
     VoiceGenerationRequest, 
     VoiceGenerationResponse,
-    ProcessedVoiceChunkResponse
+    ProcessedVoiceChunkResponse,
+    VoiceGenerationEstimateResponse
 )
 from datetime import datetime
 from models.voice_job import JobStatus
@@ -28,6 +29,7 @@ async def start_voice_generation(
     
     This endpoint creates a new voice generation job and sends it to the audio generation worker.
     """
+    print(f"Starting voice generation for user {current_user.id} and book {request.book_id}")
     try:
         job = VoiceGenerationService.create_voice_generation_job(
             db=db,
@@ -49,6 +51,36 @@ async def start_voice_generation(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to create voice generation job: {str(e)}"
         )
+    
+@router.post("/estimate", response_model=VoiceGenerationEstimateResponse)
+async def start_voice_generation(
+    request: VoiceGenerationRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Estimate the cost of a voice generation job.
+    
+    This endpoint estimates the cost of a voice generation job and checks if the user can afford it.
+    """
+    print(f"Starting voice generation for user {current_user.id} and book {request.book_id}")
+    try:
+        estimate = VoiceGenerationService.estimate_job_cost(db=db, chapters=request.chapters, user_id=current_user.id)
+        can_afford = VoiceGenerationService.can_user_afford_job(db=db, job_estimate=estimate, user_id=current_user.id)
+        return VoiceGenerationEstimateResponse(
+            total_tokens=estimate["total_tokens"],
+            total_cost=estimate["total_cost"],
+            can_afford=can_afford
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to estimate voice generation job: {str(e)}"
+        )
+
 
 @router.get("/jobs/{job_id}/status")
 async def get_job_status(
