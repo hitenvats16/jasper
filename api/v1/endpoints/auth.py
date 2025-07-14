@@ -160,24 +160,52 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     - Initiates the Google OAuth 2.0 authentication flow
     - User will be redirected to Google's login page
     - After successful authentication, user will be redirected back to the callback URL
+    - Optional redirect_url parameter allows custom redirect after authentication
+    
+    **Query Parameters:**
+    - redirect_url (optional): Custom redirect URL after successful authentication
     
     **Note:** This endpoint is part of the Google OAuth 2.0 flow
     """,
     responses={
-        307: {"description": "Redirect to Google OAuth consent screen"}
+        307: {"description": "Redirect to Google OAuth consent screen"},
+        400: {"description": "Invalid redirect URL"}
     },
     tags=["Authentication"]
 )
-def login_google():
+def login_google(redirect_url: str = None):
     """
     Redirect to Google's OAuth 2.0 consent screen.
     
     Returns:
         Response: Redirect response to Google's consent screen
+        
+    Raises:
+        HTTPException: If redirect_url is invalid
     """
+    # Validate redirect URL if provided
+    if redirect_url:
+        # Basic validation - ensure it's a valid URL
+        try:
+            from urllib.parse import urlparse
+            parsed = urlparse(redirect_url)
+            if not parsed.scheme or not parsed.netloc:
+                raise HTTPException(
+                    status_code=400, 
+                    detail="Invalid redirect URL format"
+                )
+        except Exception:
+            raise HTTPException(
+                status_code=400, 
+                detail="Invalid redirect URL"
+            )
+    
+    # Use the provided redirect URL or fall back to the configured one
+    final_redirect_uri = redirect_url if redirect_url else settings.GOOGLE_REDIRECT_URI
+    
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": settings.GOOGLE_REDIRECT_URI,
+        "redirect_uri": final_redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline",
