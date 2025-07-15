@@ -122,6 +122,11 @@ class VoiceProcessor(BaseWorker):
                 logger.error(f"Job {job_id} not found")
                 return
 
+            # Check if job status is not QUEUED (safety check)
+            if job.status != JobStatus.QUEUED:
+                logger.warning(f"Rejecting job {job_id} with not QUEUED status - job not ready for processing")
+                return
+
             # Update job status to processing
             job.status = JobStatus.PROCESSING
             db.commit()

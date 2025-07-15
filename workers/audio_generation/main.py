@@ -193,6 +193,11 @@ class AudioGenerator(BaseWorker):
             if not job:
                 raise ValueError(f"Job {job_id} not found in database")
 
+            # Check if job status is not QUEUED (safety check)
+            if job.status != JobStatus.QUEUED:
+                logger.warning(f"Rejecting voice generation job {job_id} with not QUEUED status - job not ready for processing")
+                return
+
             if not job.data:
                 raise ValueError(f"Job {job_id} has no chapter data to process")
 

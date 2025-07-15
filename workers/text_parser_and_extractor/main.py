@@ -70,6 +70,11 @@ class TextParserAndExtractor(BaseWorker):
                 logger.error(f"Book {book_id} not found")
                 return
 
+            # Check if job status is not QUEUED (safety check)
+            if job.status != JobStatus.QUEUED:
+                logger.warning(f"Rejecting book processing job {job_id} with not QUEUED status - job not ready for processing")
+                return
+
             # Update job status to processing
             job.status = JobStatus.PROCESSING
             job.data = {

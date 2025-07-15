@@ -194,6 +194,8 @@ async def create_voice(
 
     logger.info(f"Created voice {voice.id} for user {current_user.id}")
 
+    import time
+    time.sleep(0.3)
     # Create processing job using VoiceService
     job = VoiceService.create_voice_processing_job(
         db=db,
