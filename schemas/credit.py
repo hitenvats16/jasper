@@ -22,7 +22,3 @@ class UserCreditRead(BaseModel):
 
     class Config:
         from_attributes = True
-
-class AddCreditRequest(BaseModel):
-    amount: float
-    description: Optional[str] = None 

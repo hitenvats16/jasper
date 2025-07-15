@@ -27,9 +27,9 @@ class ProcessedVoiceChunks(Base):
     type = Column(SQLAlchemyEnum(ProcessedVoiceChunksType), nullable=False)
     
     # Relationships
-    user = relationship("User", back_populates="processed_voice_chunks", lazy="joined")
-    book = relationship("Book", back_populates="processed_voice_chunks", lazy="joined")
-    voice_processing_job = relationship("BookVoiceProcessingJob", back_populates="processed_chunks", lazy="joined") 
+    user = relationship("User", back_populates="processed_voice_chunks", lazy="select")
+    book = relationship("Book", back_populates="processed_voice_chunks", lazy="select")
+    voice_processing_job = relationship("BookVoiceProcessingJob", back_populates="processed_chunks", lazy="select") 
 
     @property
     def s3_public_link(self):

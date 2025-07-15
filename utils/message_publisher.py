@@ -71,20 +71,73 @@ def get_rabbitmq_connection():
         logger.error(f"Failed to create RabbitMQ connection: {str(e)}")
         raise
 
-def create_book_processing_job(book):
+def create_book_processing_job(book_id):
     """Create a BookProcessingJob for the newly created book"""
     try:
-        # Create the processing job using the service
-        book_service = BookProcessingService()
-        job = book_service.create_and_publish_job(SessionLocal(), book)
+        logger.info(f"Starting job creation for book_id: {book_id} (type: {type(book_id)})")
         
-        if job:
-            logger.info(f"Successfully created and published job {job.id} for book {book.id}")
-        else:
-            logger.error(f"Failed to create job for book {book.id}")
+        # Validate input
+        if not isinstance(book_id, int):
+            logger.error(f"Expected book_id to be an integer, got {type(book_id)}: {book_id}")
+            return
+        
+        # Get a database session
+        db = SessionLocal()
+        
+        try:
+            # Import Book model
+            from models.book import Book
+            logger.info("Successfully imported Book model")
+            
+            # Get the book object from the database
+            logger.info(f"Querying for book with ID: {book_id}")
+            book = db.query(Book).filter(Book.id == book_id, Book.is_deleted == False).first()
+            
+            if not book:
+                logger.error(f"Book with ID {book_id} not found in database")
+                return
+            
+            logger.info(f"Found book: {book.title} (ID: {book.id}, type: {type(book)})")
+            
+            # Validate book object
+            if not hasattr(book, 'id'):
+                logger.error(f"Book object doesn't have 'id' attribute. Type: {type(book)}, Dir: {dir(book)}")
+                return
+                
+            if not hasattr(book, 'user_id'):
+                logger.error(f"Book object doesn't have 'user_id' attribute. Type: {type(book)}, Dir: {dir(book)}")
+                return
+            
+            # Create the processing job using the service
+            logger.info("Creating BookProcessingService instance")
+            book_service = BookProcessingService()
+            
+            logger.info(f"Calling create_and_publish_job with book object (ID: {book.id})")
+            job = book_service.create_and_publish_job(db, book)
+            
+            if job:
+                logger.info(f"Successfully created and published job {job.id} for book {book_id}")
+            else:
+                logger.error(f"Failed to create job for book {book_id} - service returned None")
+        
+        except Exception as e:
+            logger.error(f"Error in create_book_processing_job: {str(e)}")
+            logger.error(f"Error type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
+            raise
+        finally:
+            try:
+                db.close()
+                logger.info("Database session closed")
+            except Exception as e:
+                logger.error(f"Error closing database session: {str(e)}")
         
     except Exception as e:
-        logger.error(f"Failed to create BookProcessingJob for book {book.id}: {str(e)}")
+        logger.error(f"Failed to create BookProcessingJob for book {book_id}: {str(e)}")
+        logger.error(f"Exception type: {type(e)}")
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
         # Don't fail the book creation if job creation fails
 
 def publish_voice_job(job_id: int):

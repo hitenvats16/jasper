@@ -19,7 +19,7 @@ class Config(Base):
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
     
     # Relationships
-    user = relationship("User", back_populates="config", lazy="joined")
+    user = relationship("User", back_populates="config", lazy="select")
     
     # Constraints
     __table_args__ = (

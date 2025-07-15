@@ -27,7 +27,7 @@ class Project(Base):
     is_deleted = Column(Boolean, default=False)
 
     # Relationship with User
-    user = relationship("User", back_populates="projects", lazy="joined")
+    user = relationship("User", back_populates="projects", lazy="select")
     
     # Relationship with Books (optional - through association table)
-    books = relationship("Book", secondary="book_project_association", back_populates="projects", lazy="joined")
+    books = relationship("Book", secondary="book_project_association", back_populates="projects", lazy="select")

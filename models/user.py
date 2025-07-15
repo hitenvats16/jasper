@@ -18,22 +18,23 @@ class User(Base):
     first_name = Column(String, nullable=True)
     last_name = Column(String, nullable=True)
 
-    # Add relationships with string references to avoid circular imports
-    oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    voices = relationship("Voice", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    credit = relationship("UserCredit", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
-    voice_jobs = relationship("VoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    book_processing_jobs = relationship("BookProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    book_voice_processing_jobs = relationship("BookVoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    processed_voice_chunks = relationship("ProcessedVoiceChunks", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    projects = relationship("Project", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    books = relationship("Book", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    config = relationship("Config", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
+    # Optimized relationships - using lazy loading instead of eager loading
+    # This prevents the 23-second delay caused by 13 JOIN operations
+    oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    voices = relationship("Voice", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    credit = relationship("UserCredit", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="select")
+    voice_jobs = relationship("VoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    book_processing_jobs = relationship("BookProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    book_voice_processing_jobs = relationship("BookVoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    processed_voice_chunks = relationship("ProcessedVoiceChunks", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    projects = relationship("Project", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    books = relationship("Book", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    config = relationship("Config", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="select")
     # Payment relationships
-    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan", lazy="joined")
-    refunds = relationship("PaymentRefund", back_populates="user", cascade="all, delete-orphan", lazy="joined")
+    payments = relationship("Payment", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    refunds = relationship("PaymentRefund", back_populates="user", cascade="all, delete-orphan", lazy="select")
     # Rate relationship
-    rate = relationship("Rate", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="joined")
+    rate = relationship("Rate", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="select")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_account"
@@ -46,4 +47,4 @@ class OAuthAccount(Base):
     refresh_token = Column(String, nullable=True)
     expires_at = Column(DateTime(timezone=True), nullable=True)
 
-    user = relationship("User", back_populates="oauth_accounts", lazy="joined") 
+    user = relationship("User", back_populates="oauth_accounts", lazy="select") 

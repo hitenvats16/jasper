@@ -19,6 +19,9 @@ from utils.message_publisher import get_rabbitmq_connection
 from api.v1.endpoints import config_router
 from core.config import settings
 from datetime import datetime
+import asyncio
+from contextlib import asynccontextmanager
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -58,7 +61,20 @@ async def on_startup():
         logger.warning(f"RabbitMQ connection failed: {str(e)}")
         logger.warning("Application will start without RabbitMQ. Some features may be limited.")
     
-    await sync_lemonsqueezy_products()
+    # Skip LemonSqueezy sync if environment variable is set
+    if os.environ.get("SKIP_LEMONSQUEEZY_SYNC", "0") == "1":
+        logger.info("Skipping LemonSqueezy sync due to SKIP_LEMONSQUEEZY_SYNC=1")
+        return
+    
+    # Make LemonSqueezy sync non-blocking - don't await it
+    try:
+        logger.info("Starting LemonSqueezy product sync in background...")
+        import asyncio
+        asyncio.create_task(sync_lemonsqueezy_products())
+        logger.info("LemonSqueezy sync started in background")
+    except Exception as e:
+        logger.warning(f"Failed to start LemonSqueezy sync: {str(e)}")
+        logger.warning("Application will continue without synced products.")
 
 async def sync_lemonsqueezy_products():
     """Sync LemonSqueezy products"""
@@ -80,8 +96,14 @@ async def sync_lemonsqueezy_products():
         logger.error(f"Failed to sync LemonSqueezy products: {str(e)}")
         logger.warning("Application will continue without synced products. Payment plans may not be available.")
 
-# Initialize rate limiter
-limiter = Limiter(key_func=get_remote_address)
+# Initialize rate limiter with optimized settings for better performance
+limiter = Limiter(
+    key_func=get_remote_address,
+    default_limits=["200/minute"],  # Set a reasonable default limit
+    storage_uri="memory://",  # Use in-memory storage for faster performance
+    headers_enabled=True,
+    retry_after="http-date"
+)
 
 app = FastAPI(
     title="Jasper Voice Gateway API",
@@ -130,6 +152,23 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Add timing middleware to debug the 20-second delay
+@app.middleware("http")
+async def timing_middleware(request: Request, call_next):
+    start_time = time.time()
+    logger.info(f"🚀 Request started: {request.method} {request.url}")
+    
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        logger.info(f"✅ Request completed in {process_time:.2f}s: {request.method} {request.url}")
+        response.headers["X-Process-Time"] = str(process_time)
+        return response
+    except Exception as e:
+        process_time = time.time() - start_time
+        logger.error(f"❌ Request failed after {process_time:.2f}s: {request.method} {request.url} - Error: {str(e)}")
+        raise
 
 def custom_openapi():
     if app.openapi_schema:
@@ -224,8 +263,27 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
+@app.get("/health/fast")
+def health_fast():
+    """
+    Ultra-fast health check endpoint with no dependencies, rate limiting, or async overhead.
+    Use this to test if the basic FastAPI app is responsive.
+    """
+    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
+
+@app.get("/health/simple")
+async def health_simple():
+    """
+    Simple health check endpoint without any dependencies for quick response.
+    """
+    return {
+        "status": "ok",
+        "timestamp": datetime.utcnow().isoformat(),
+        "version": app.version
+    }
+
 @app.get("/health")
-@limiter.limit("100/minute")
+@limiter.limit("200/minute")
 async def health(
     request: Request,
     current_user: User = Depends(get_optional_user)
@@ -249,81 +307,75 @@ async def health(
     
     return response
 
-@app.get("/health/simple")
-async def health_simple():
-    """
-    Simple health check endpoint without any dependencies for quick response.
-    """
-    return {
-        "status": "ok",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": app.version
-    }
+# Simple rate limiting dependency to reduce overhead
+def get_rate_limit():
+    # Allow disabling rate limiting for development
+    if os.environ.get("DISABLE_RATE_LIMITING", "0") == "1":
+        return lambda: None  # No-op function
+    return limiter.limit("200/minute")  # Simplified dependency
 
-# Include routers with rate limiting
+# Include routers with simplified rate limiting
 app.include_router(
     auth.router,
     prefix="/api/v1",
     tags=["Authentication"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[Depends(get_rate_limit)]
 )
 
 app.include_router(
     voice.router,
     prefix="/api/v1",
     tags=["Voice Management"],
-    dependencies=[
-        Depends(lambda: (print("Random statement: Did you know? The honeybee is the only insect that produces food eaten by humans."), limiter.limit("100/minute"))[1])
-    ],
+    dependencies=[Depends(get_rate_limit)]
 )
 
 app.include_router(
     credit_router,
     prefix="/api/v1",
     tags=["Credits"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[Depends(get_rate_limit)]
 )
 
 app.include_router(
     admin.router,
     prefix="/api/v1",
     tags=["Admin"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[Depends(get_rate_limit)]
 )
 
 app.include_router(
     project_router,
     prefix="/api/v1",
     tags=["Projects"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[Depends(get_rate_limit)]
 )
 
 app.include_router(
     book_router,
     prefix="/api/v1",
     tags=["Books"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[Depends(get_rate_limit)]
 )
 
 app.include_router(
     voice_generation_router,
     prefix="/api/v1/voice-generation",
     tags=["Voice Generation"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[Depends(get_rate_limit)]
 )
 
 app.include_router(
     config_router,
     prefix="/api/v1/config",
     tags=["Config"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[Depends(get_rate_limit)]
 )
 
 app.include_router(
     payment.router,
     prefix="/api/v1/payments",
     tags=["Payments"],
-    dependencies=[Depends(lambda: limiter.limit("100/minute"))]
+    dependencies=[Depends(get_rate_limit)]
 )
 
 if __name__ == "__main__":

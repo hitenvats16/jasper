@@ -21,5 +21,5 @@ class BookProcessingJob(Base):
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False)
     
     # Relationships
-    user = relationship("User", back_populates="book_processing_jobs", lazy="joined")
-    book = relationship("Book", back_populates="processing_jobs", lazy="joined")
+    user = relationship("User", back_populates="book_processing_jobs", lazy="select")
+    book = relationship("Book", back_populates="processing_jobs", lazy="select")

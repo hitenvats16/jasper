@@ -5,7 +5,7 @@ from models.book import Book
 from models.user import User
 from models.voice_job import JobStatus
 from schemas.voice_generation import VoiceGenerationRequest, ChapterData
-from typing import List, Optional
+from typing import List, Optional, Union, Dict, Any
 from fastapi import HTTPException, status
 import json
 import logging
@@ -14,6 +14,7 @@ from core.config import settings
 from services.rate_service import RateService
 from utils.text import count_tokens
 from services.credit_service import CreditService
+from models.credit import UserCredit
 
 logger = logging.getLogger(__name__)
 
@@ -89,12 +90,15 @@ class VoiceGenerationService:
         return job
     
     @staticmethod
-    def estimate_job_cost(db: Session, chapters: List[ChapterData], user_id: int) -> float:
+    def estimate_job_cost(db: Session, chapters: List[Union[ChapterData, Dict[str, Any]]], user_id: int) -> Dict[str, Any]:
         """Estimate the cost of a voice generation job"""
         rate = RateService.get_user_rate_value(db=db, user_id=user_id)
         total_tokens = 0
         for chapter in chapters:
-            total_tokens += count_tokens(chapter.chapter_content)
+            if isinstance(chapter, ChapterData):
+                total_tokens += count_tokens(chapter.chapter_content)
+            else:
+                total_tokens += count_tokens(chapter.get("chapter_content", ""))
         return {
             "total_tokens": total_tokens,
             "total_cost": total_tokens * rate
@@ -103,7 +107,8 @@ class VoiceGenerationService:
     @staticmethod
     def can_user_afford_job(db: Session, job_estimate: dict, user_id: int) -> bool:
         """Check if a user can afford a voice generation job"""
-        user_credit = RateService.get_user_rate_value(db=db, user_id=user_id)
+        user_credit = CreditService.get_or_create_user_credit(db, user_id)
+        user_credit = user_credit.balance
 
         # Get processing or in queue jobs and sum up credits
         processing_jobs = db.query(BookVoiceProcessingJob).filter(
@@ -112,6 +117,7 @@ class VoiceGenerationService:
         ).all()
 
         total_credits = sum([job.credit_takes for job in processing_jobs]) + job_estimate["total_cost"]
+        print(f"Total credits: {total_credits}, user credit: {user_credit}")
         return user_credit >= total_credits
     
     @staticmethod

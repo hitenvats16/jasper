@@ -15,6 +15,7 @@ from datetime import datetime
 from models.voice_job import JobStatus
 from models.processed_voice_chunks import ProcessedVoiceChunks, ProcessedVoiceChunksType
 from models.book_voice_processing_job import BookVoiceProcessingJob
+from models.book import Book
 
 router = APIRouter()
 
@@ -133,25 +134,29 @@ async def get_user_jobs(
         for job in jobs
     ]
 
-@router.get("/generated-voices/{book_id}", response_model=List[ProcessedVoiceChunkResponse])
+@router.get("/generated-voices/{job_id}", response_model=List[ProcessedVoiceChunkResponse])
 async def get_generated_voices(
-    book_id: int,
+    job_id: int,
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get the list of generated voices for a specific book.
+    Get the list of generated voices for a specific job.
     
-    This endpoint retrieves all ProcessedVoiceChunks with type CHAPTER_AUDIO for the specified book,
+    This endpoint retrieves all ProcessedVoiceChunks with type CHAPTER_AUDIO for the specified job,
     sorted in ascending order by index, and includes S3 public links for each voice file.
     """
     try:
-        # Verify the book belongs to the user
-        from models.book import Book
+        job = db.query(BookVoiceProcessingJob).filter(
+            BookVoiceProcessingJob.id == job_id,
+            BookVoiceProcessingJob.user_id == current_user.id,
+            BookVoiceProcessingJob.is_deleted == False
+        ).first()
+        
         book = db.query(Book).filter(
-            Book.id == book_id,
+            Book.id == job.book_id,
             Book.user_id == current_user.id,
             Book.is_deleted == False
         ).first()
@@ -164,10 +169,11 @@ async def get_generated_voices(
         
         # Query ProcessedVoiceChunks with type CHAPTER_AUDIO for this book
         voice_chunks = db.query(ProcessedVoiceChunks).filter(
-            ProcessedVoiceChunks.book_id == book_id,
+            ProcessedVoiceChunks.book_id == job.book_id,
             ProcessedVoiceChunks.user_id == current_user.id,
             ProcessedVoiceChunks.type == ProcessedVoiceChunksType.CHAPTER_AUDIO,
-            ProcessedVoiceChunks.is_deleted == False
+            ProcessedVoiceChunks.is_deleted == False,
+            ProcessedVoiceChunks.voice_processing_job_id == job_id
         ).order_by(ProcessedVoiceChunks.index.asc()).offset(skip).limit(limit).all()
         
         # Convert to response model with s3_links

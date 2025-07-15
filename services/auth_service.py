@@ -140,7 +140,7 @@ def get_or_create_user_by_google_oauth(db: Session, code: str, redirect_uri: str
     logger.info(f"Exchanging OAuth code for tokens with redirect_uri: {redirect_uri}")
     
     async def fetch_tokens():
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:  # Add 10 second timeout
             resp = await client.post(token_url, data=data)
             if resp.status_code != 200:
                 logger.error(f"Token exchange failed with status {resp.status_code}: {resp.text}")
@@ -185,7 +185,7 @@ def get_or_create_user_by_google_oauth(db: Session, code: str, redirect_uri: str
     userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
     headers = {"Authorization": f"Bearer {access_token}"}
     async def fetch_userinfo():
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=10.0) as client:  # Add 10 second timeout
             resp = await client.get(userinfo_url, headers=headers)
             resp.raise_for_status()
             return resp.json()

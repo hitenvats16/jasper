@@ -9,6 +9,7 @@ from models.book_processing_job import BookProcessingJob
 from models.book_voice_processing_job import BookVoiceProcessingJob
 from models.processed_voice_chunks import ProcessedVoiceChunks, ProcessedVoiceChunksType
 from models.config import Config
+from models.rate import Rate
 from models.payment import (
     PaymentPlan, Payment, PaymentRefund,
     PlanType, PaymentStatus, RefundStatus
@@ -32,6 +33,7 @@ __all__ = [
     'ProcessedVoiceChunks',
     'Config',
     'ProcessedVoiceChunksType',
+    'Rate',
     'PaymentPlan',
     'Payment',
     'PaymentRefund',

@@ -21,11 +21,11 @@ try:
         SQLALCHEMY_DATABASE_URL,
         pool_size=5,
         max_overflow=10,
-        pool_timeout=30,
+        pool_timeout=5,  # Reduced from 30 to 5 seconds - this was causing the 20+ second delays
         pool_recycle=1800,
         pool_pre_ping=True,  # Enable connection health checks
         connect_args={
-            "connect_timeout": 10,  # 10 second connection timeout
+            "connect_timeout": 5,  # Reduced from 10 to 5 seconds for faster failure detection
             "application_name": "jasper_gateway"
         }
     )

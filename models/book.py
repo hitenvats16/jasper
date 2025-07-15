@@ -37,15 +37,15 @@ class Book(Base):
     is_deleted = Column(Boolean, default=False)
 
     # Relationships
-    user = relationship("User", back_populates="books", lazy="joined")
+    user = relationship("User", back_populates="books", lazy="select")
     # Optional relationship with projects through association table
-    projects = relationship("Project", secondary=book_project_association, back_populates="books", lazy="joined")
+    projects = relationship("Project", secondary=book_project_association, back_populates="books", lazy="select")
     # Processing jobs for this book
-    processing_jobs = relationship("BookProcessingJob", back_populates="book", lazy="joined")
+    processing_jobs = relationship("BookProcessingJob", back_populates="book", lazy="select")
     # Voice processing jobs for this book
-    voice_processing_jobs = relationship("BookVoiceProcessingJob", back_populates="book", lazy="joined")
+    voice_processing_jobs = relationship("BookVoiceProcessingJob", back_populates="book", lazy="select")
     # Processed voice chunks for this book
-    processed_voice_chunks = relationship("ProcessedVoiceChunks", back_populates="book", lazy="joined") 
+    processed_voice_chunks = relationship("ProcessedVoiceChunks", back_populates="book", lazy="select") 
 
     @property
     def s3_public_link(self):

@@ -21,6 +21,6 @@ class BookVoiceProcessingJob(Base):
     book_id = Column(Integer, ForeignKey("book.id"), nullable=False)
     
     # Relationships
-    user = relationship("User", back_populates="book_voice_processing_jobs", lazy="joined")
-    book = relationship("Book", back_populates="voice_processing_jobs", lazy="joined")
-    processed_chunks = relationship("ProcessedVoiceChunks", back_populates="voice_processing_job", cascade="all, delete-orphan", lazy="joined") 
+    user = relationship("User", back_populates="book_voice_processing_jobs", lazy="select")
+    book = relationship("Book", back_populates="voice_processing_jobs", lazy="select")
+    processed_chunks = relationship("ProcessedVoiceChunks", back_populates="voice_processing_job", cascade="all, delete-orphan", lazy="select") 

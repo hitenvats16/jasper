@@ -10,14 +10,16 @@ from models import User, VoiceProcessingJob, Voice  # Import models to ensure th
 logger = logging.getLogger(__name__)
 
 class BaseWorker(ABC):
-    def __init__(self, queue_name: str):
+    def __init__(self, queue_name: str, max_retries: int = 3):
         """
         Initialize the worker with a specific queue name.
         
         Args:
             queue_name: The name of the RabbitMQ queue to consume from
+            max_retries: Maximum number of retry attempts before rejecting message permanently
         """
         self.queue_name = queue_name
+        self.max_retries = max_retries
         self.connection = None
         self.channel = None
         self.connect()
@@ -38,10 +40,18 @@ class BaseWorker(ABC):
                 durable=True
             )
             
+            # Declare dead letter queue for failed messages
+            dead_letter_queue = f"{self.queue_name}_dead_letter"
+            self.channel.queue_declare(
+                queue=dead_letter_queue,
+                durable=True
+            )
+            
             # Set prefetch count
             self.channel.basic_qos(prefetch_count=1)
             
             logger.info(f"Successfully connected to RabbitMQ queue: {self.queue_name}")
+            logger.info(f"Dead letter queue created: {dead_letter_queue}")
         except Exception as e:
             logger.error(f"Failed to connect to RabbitMQ: {str(e)}")
             raise
@@ -63,8 +73,62 @@ class BaseWorker(ABC):
             logger.info(f"Successfully processed message from queue {self.queue_name}")
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
-            # Reject message and requeue
-            ch.basic_nack(delivery_tag=method.delivery_tag, requeue=True)
+            
+            # Get retry count from message headers
+            retry_count = 0
+            if properties.headers:
+                retry_count = properties.headers.get('x-retry-count', 0)
+            
+            if retry_count < self.max_retries:
+                # Increment retry count and requeue
+                retry_count += 1
+                logger.warning(f"Requeuing message (attempt {retry_count}/{self.max_retries})")
+                
+                # Update headers with retry count
+                new_headers = properties.headers.copy() if properties.headers else {}
+                new_headers['x-retry-count'] = retry_count
+                new_headers['x-first-failure-time'] = new_headers.get('x-first-failure-time', datetime.utcnow().isoformat())
+                new_headers['x-last-failure-time'] = datetime.utcnow().isoformat()
+                new_headers['x-last-error'] = str(e)[:500]  # Truncate long error messages
+                
+                # Republish with updated headers
+                ch.basic_publish(
+                    exchange='',
+                    routing_key=self.queue_name,
+                    body=body,
+                    properties=pika.BasicProperties(
+                        headers=new_headers,
+                        delivery_mode=2
+                    )
+                )
+                
+                # Acknowledge original message to remove it from queue
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+            else:
+                # Max retries reached, send to dead letter queue
+                logger.error(f"Max retries ({self.max_retries}) reached for message. Moving to dead letter queue.")
+                dead_letter_queue = f"{self.queue_name}_dead_letter"
+                
+                # Add failure metadata to headers
+                final_headers = properties.headers.copy() if properties.headers else {}
+                final_headers['x-final-failure-time'] = datetime.utcnow().isoformat()
+                final_headers['x-final-error'] = str(e)[:500]
+                final_headers['x-total-retries'] = retry_count
+                
+                # Send to dead letter queue
+                ch.basic_publish(
+                    exchange='',
+                    routing_key=dead_letter_queue,
+                    body=body,
+                    properties=pika.BasicProperties(
+                        headers=final_headers,
+                        delivery_mode=2
+                    )
+                )
+                
+                # Acknowledge original message to remove it from queue
+                ch.basic_ack(delivery_tag=method.delivery_tag)
+                logger.info(f"Message moved to dead letter queue: {dead_letter_queue}")
 
     @abstractmethod
     def process(self, job_data: Dict[str, Any]) -> None:

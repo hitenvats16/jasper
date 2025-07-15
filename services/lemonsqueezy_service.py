@@ -120,7 +120,7 @@ class LemonSqueezyService:
             logger.info(f"Checkout data prepared: {json.dumps(checkout_data, indent=2)}")
 
             # Create checkout session
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:  # Reduced timeout from 30 to 10 seconds
                 response = await client.post(
                     f"{self.base_url}/checkouts",
                     headers=headers,
@@ -487,7 +487,7 @@ class LemonSqueezyService:
             page = 1
             
             while True:
-                async with httpx.AsyncClient(timeout=30.0) as client:  # 30 second timeout
+                async with httpx.AsyncClient(timeout=10.0) as client:  # Reduced timeout from 30 to 10 seconds
                     response = await client.get(
                         f"{self.base_url}/products",
                         headers=self._get_headers(),
@@ -624,7 +624,7 @@ class LemonSqueezyService:
     async def _fetch_product_variants(self, product_id: str) -> List[Dict[str, Any]]:
         """Fetch variants for a specific product"""
         try:
-            async with httpx.AsyncClient(timeout=30.0) as client:
+            async with httpx.AsyncClient(timeout=10.0) as client:  # Reduced timeout from 30 to 10 seconds
                 response = await client.get(
                     f"{self.base_url}/products/{product_id}/variants",
                     headers=self._get_headers()

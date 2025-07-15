@@ -30,8 +30,6 @@ class CreditService:
     @staticmethod
     def deduct_credit(db: Session, user_id: int, amount: float, description: Optional[str] = None) -> UserCredit:
         credit = CreditService.get_or_create_user_credit(db, user_id)
-        if credit.balance < amount:
-            raise ValueError("Insufficient credits")
         credit.balance -= amount
         db.add(credit)
         db.commit()

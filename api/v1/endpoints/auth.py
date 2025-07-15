@@ -160,10 +160,6 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     - Initiates the Google OAuth 2.0 authentication flow
     - User will be redirected to Google's login page
     - After successful authentication, user will be redirected back to the callback URL
-    - Optional redirect_url parameter allows custom redirect after authentication
-    
-    **Query Parameters:**
-    - redirect_url (optional): Custom redirect URL after successful authentication
     
     **Note:** This endpoint is part of the Google OAuth 2.0 flow
     """,
@@ -173,7 +169,7 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     },
     tags=["Authentication"]
 )
-def login_google(redirect_url: str = None):
+def login_google():
     """
     Redirect to Google's OAuth 2.0 consent screen.
     
@@ -183,26 +179,10 @@ def login_google(redirect_url: str = None):
     Raises:
         HTTPException: If redirect_url is invalid
     """
-    # Validate redirect URL if provided
-    if redirect_url:
-        # Basic validation - ensure it's a valid URL
-        try:
-            from urllib.parse import urlparse
-            parsed = urlparse(redirect_url)
-            if not parsed.scheme or not parsed.netloc:
-                raise HTTPException(
-                    status_code=400, 
-                    detail="Invalid redirect URL format"
-                )
-        except Exception:
-            raise HTTPException(
-                status_code=400, 
-                detail="Invalid redirect URL"
-            )
     
     # Always use the configured Google redirect URI for OAuth callback
     # The custom redirect_url is only for final user redirect after authentication
-    oauth_redirect_uri = parsed.geturl() if parsed else settings.GOOGLE_REDIRECT_URI
+    oauth_redirect_uri = settings.GOOGLE_REDIRECT_URI
     print(f"OAuth redirect URI: {oauth_redirect_uri}")
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
@@ -212,14 +192,6 @@ def login_google(redirect_url: str = None):
         "access_type": "offline",
         "prompt": "consent",
     }
-    
-    # Add state parameter with redirect URL for callback to use
-    if redirect_url:
-        import base64
-        import json
-        state_data = {"redirect_url": redirect_url}
-        state_encoded = base64.urlsafe_b64encode(json.dumps(state_data).encode()).decode()
-        params["state"] = state_encoded
     
     url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
     return Response(status_code=302, headers={"Location": url})
@@ -266,7 +238,6 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
         HTTPException: If OAuth code is invalid or missing
     """
     code = request.query_params.get("code")
-    redirect_url = request.query_params.get("redirect_url")
     
     if not code:
         raise HTTPException(status_code=400, detail="Missing code in callback")
@@ -274,9 +245,6 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
     # Always use the configured Google redirect URI for OAuth token exchange
     # This must match what was used in the authorization request
     oauth_redirect_uri = settings.GOOGLE_REDIRECT_URI
-    if redirect_url:
-        oauth_redirect_uri = redirect_url
-    print(f"Using redirect_uri: {oauth_redirect_uri}")
     
     # Use the OAuth redirect URI for token exchange
     user = get_or_create_user_by_google_oauth(db, code, oauth_redirect_uri)

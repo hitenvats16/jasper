@@ -20,6 +20,27 @@ class BookProcessingService:
     def create_processing_job(self, db: Session, book: Book) -> BookProcessingJob:
         """Create a new BookProcessingJob for a book"""
         try:
+            # Validate inputs
+            logger.info(f"Creating processing job - book type: {type(book)}, book value: {book}")
+            
+            if not book:
+                logger.error("Book object is None or empty")
+                raise ValueError("Book object is required")
+            
+            if isinstance(book, int):
+                logger.error(f"Expected Book object, got integer: {book}")
+                raise TypeError(f"Expected Book object, got integer: {book}")
+            
+            if not hasattr(book, 'id'):
+                logger.error(f"Book object missing 'id' attribute. Type: {type(book)}")
+                raise AttributeError(f"Book object missing 'id' attribute. Type: {type(book)}")
+                
+            if not hasattr(book, 'user_id'):
+                logger.error(f"Book object missing 'user_id' attribute. Type: {type(book)}")
+                raise AttributeError(f"Book object missing 'user_id' attribute. Type: {type(book)}")
+            
+            logger.info(f"Creating BookProcessingJob for book {book.id}, user {book.user_id}")
+            
             processing_job = BookProcessingJob(
                 user_id=book.user_id,
                 book_id=book.id,
@@ -34,7 +55,11 @@ class BookProcessingService:
             return processing_job
             
         except Exception as e:
-            logger.error(f"Failed to create BookProcessingJob for book {book.id}: {str(e)}")
+            logger.error(f"Failed to create BookProcessingJob for book {getattr(book, 'id', 'unknown')}: {str(e)}")
+            logger.error(f"Book object type: {type(book)}")
+            logger.error(f"Exception type: {type(e)}")
+            import traceback
+            logger.error(f"Traceback: {traceback.format_exc()}")
             raise
 
     def publish_job_to_queue(self, job: BookProcessingJob, book: Book) -> bool:
