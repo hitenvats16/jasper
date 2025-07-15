@@ -135,9 +135,42 @@ def get_or_create_user_by_google_oauth(db: Session, code: str, redirect_uri: str
         "redirect_uri": redirect_uri,
         "grant_type": "authorization_code",
     }
+
+    # Log the request data for debugging (without sensitive info)
+    logger.info(f"Exchanging OAuth code for tokens with redirect_uri: {redirect_uri}")
+    
     async def fetch_tokens():
         async with httpx.AsyncClient() as client:
             resp = await client.post(token_url, data=data)
+            if resp.status_code != 200:
+                logger.error(f"Token exchange failed with status {resp.status_code}: {resp.text}")
+                logger.error(f"Request data (code truncated): {{'code': '{code[:20]}...', 'client_id': '{data['client_id']}', 'redirect_uri': '{redirect_uri}', 'grant_type': '{data['grant_type']}'}}")
+                # Try to parse the error response from Google
+                try:
+                    error_data = resp.json()
+                    logger.error(f"Google OAuth error: {error_data}")
+                    
+                    # Handle specific OAuth errors
+                    error_type = error_data.get("error", "")
+                    error_description = error_data.get("error_description", "")
+                    
+                    if error_type == "invalid_grant":
+                        raise ValueError(f"invalid_grant: {error_description or 'Authorization code expired or already used'}. Check that redirect_uri matches exactly.")
+                    elif error_type == "invalid_client":
+                        raise ValueError(f"invalid_client: {error_description or 'Invalid client credentials'}")
+                    elif error_type == "invalid_request":
+                        raise ValueError(f"invalid_request: {error_description or 'Invalid request parameters'}")
+                    elif error_type == "redirect_uri_mismatch":
+                        raise ValueError(f"redirect_uri_mismatch: {error_description or 'Redirect URI does not match registered URI'}")
+                    else:
+                        raise ValueError(f"{error_type}: {error_description or 'Unknown OAuth error'}")
+                        
+                except ValueError:
+                    # Re-raise ValueError (our custom OAuth errors)
+                    raise
+                except:
+                    logger.error(f"Could not parse error response as JSON: {resp.text}")
+                    raise ValueError(f"OAuth error: {resp.text}")
             resp.raise_for_status()
             return resp.json()
     import asyncio

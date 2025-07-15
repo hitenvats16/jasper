@@ -334,9 +334,5 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app", 
         host="0.0.0.0", 
-        port=port, 
-        reload=False,  # Disable reload for better performance
-        workers=1,     # Single worker for development
-        access_log=True,
-        log_level="info"
+        port=port
     )

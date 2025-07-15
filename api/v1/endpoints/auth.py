@@ -200,17 +200,27 @@ def login_google(redirect_url: str = None):
                 detail="Invalid redirect URL"
             )
     
-    # Use the provided redirect URL or fall back to the configured one
-    final_redirect_uri = redirect_url if redirect_url else settings.GOOGLE_REDIRECT_URI
-    
+    # Always use the configured Google redirect URI for OAuth callback
+    # The custom redirect_url is only for final user redirect after authentication
+    oauth_redirect_uri = parsed.geturl() if parsed else settings.GOOGLE_REDIRECT_URI
+    print(f"OAuth redirect URI: {oauth_redirect_uri}")
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
-        "redirect_uri": final_redirect_uri,
+        "redirect_uri": oauth_redirect_uri,
         "response_type": "code",
         "scope": "openid email profile",
         "access_type": "offline",
         "prompt": "consent",
     }
+    
+    # Add state parameter with redirect URL for callback to use
+    if redirect_url:
+        import base64
+        import json
+        state_data = {"redirect_url": redirect_url}
+        state_encoded = base64.urlsafe_b64encode(json.dumps(state_data).encode()).decode()
+        params["state"] = state_encoded
+    
     url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
     return Response(status_code=302, headers={"Location": url})
 
@@ -226,12 +236,18 @@ def login_google(redirect_url: str = None):
     - Creates or updates user account
     - Generates JWT access token
     - Returns token with expiration time
+    - Optionally redirects to custom URL if provided in state parameter
+    
+    **Query Parameters:**
+    - code: OAuth authorization code from Google
+    - state: Optional state parameter containing redirect URL
     
     **Note:** This endpoint is called by Google after successful authentication
     """,
     responses={
         200: {"description": "Successfully authenticated with Google"},
-        400: {"description": "Invalid or missing OAuth code"}
+        400: {"description": "Invalid or missing OAuth code"},
+        302: {"description": "Redirect to custom URL after authentication"}
     },
     tags=["Authentication"]
 )
@@ -240,21 +256,34 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
     Handle Google OAuth callback and generate JWT token.
     
     Args:
-        request: FastAPI request object containing OAuth code
+        request: FastAPI request object containing OAuth code and state
         db: Database session
     
     Returns:
-        Token: JWT access token with expiration time
+        Token: JWT access token with expiration time or redirect response
         
     Raises:
         HTTPException: If OAuth code is invalid or missing
     """
     code = request.query_params.get("code")
+    redirect_url = request.query_params.get("redirect_url")
+    
     if not code:
         raise HTTPException(status_code=400, detail="Missing code in callback")
-    user = get_or_create_user_by_google_oauth(db, code, settings.GOOGLE_REDIRECT_URI)
+    
+    # Always use the configured Google redirect URI for OAuth token exchange
+    # This must match what was used in the authorization request
+    oauth_redirect_uri = settings.GOOGLE_REDIRECT_URI
+    if redirect_url:
+        oauth_redirect_uri = redirect_url
+    print(f"Using redirect_uri: {oauth_redirect_uri}")
+    
+    # Use the OAuth redirect URI for token exchange
+    user = get_or_create_user_by_google_oauth(db, code, oauth_redirect_uri)
     expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token({"user_id": user.id, "email": user.email}, expires_delta=expires_delta)
+    
+    # Return token directly if no custom redirect
     return {"access_token": access_token, "token_type": "bearer", "expires_in": expires_delta.total_seconds()}
 
 @router.get(
