@@ -130,9 +130,21 @@ class VoiceGenerationService:
         ).first()
     
     @staticmethod
-    def get_user_jobs(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[BookVoiceProcessingJob]:
-        """Get all voice generation jobs for a user"""
-        return db.query(BookVoiceProcessingJob).filter(
+    def get_user_jobs(db: Session, user_id: int, skip: int = 0, limit: int = 100, project_id: int = None) -> List[BookVoiceProcessingJob]:
+        """Get voice generation jobs for a user, optionally filtered by project"""
+        query = db.query(BookVoiceProcessingJob).filter(
             BookVoiceProcessingJob.user_id == user_id,
             BookVoiceProcessingJob.is_deleted == False
-        ).order_by(BookVoiceProcessingJob.created_at.desc()).offset(skip).limit(limit).all()
+        )
+        
+        # If project_id is provided, join with Book and filter by project
+        if project_id is not None:
+            from models.book import Book, book_project_association
+            query = query.join(Book, BookVoiceProcessingJob.book_id == Book.id).join(
+                book_project_association, Book.id == book_project_association.c.book_id
+            ).filter(
+                book_project_association.c.project_id == project_id,
+                Book.is_deleted == False
+            )
+        
+        return query.order_by(BookVoiceProcessingJob.created_at.desc()).offset(skip).limit(limit).all()

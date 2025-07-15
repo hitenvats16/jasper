@@ -111,15 +111,26 @@ async def get_job_status(
 
 @router.get("/jobs", response_model=List[dict])
 async def get_user_jobs(
+    project_id: int = Query(None, description="Filter jobs by project ID"),
     skip: int = Query(0, ge=0),
     limit: int = Query(100, ge=1, le=1000),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
     """
-    Get all voice generation jobs for the current user.
+    Get voice generation jobs for the current user.
+    
+    Args:
+        project_id: Optional project ID to filter jobs by. If provided, only returns 
+                   jobs for books that are associated with the specified project.
+        skip: Number of records to skip for pagination
+        limit: Maximum number of records to return (1-1000)
+    
+    Returns:
+        List of voice generation jobs with job details including job_id, status, 
+        book_id, data, result, created_at, and updated_at.
     """
-    jobs = VoiceGenerationService.get_user_jobs(db, current_user.id, skip, limit)
+    jobs = VoiceGenerationService.get_user_jobs(db, current_user.id, skip, limit, project_id)
     
     return [
         {
