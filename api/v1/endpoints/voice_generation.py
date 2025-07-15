@@ -213,6 +213,7 @@ async def get_generated_voices(
 
 @router.get("/all-generated-voices", response_model=List[ProcessedVoiceChunkResponse])
 async def get_all_generated_voices(
+    project_id: int = Query(None, description="Filter generated voices by project ID"),
     skip: int = Query(0, ge=0, description="Number of records to skip"),
     limit: int = Query(100, ge=1, le=1000, description="Maximum number of records to return"),
     db: Session = Depends(get_db),
@@ -221,16 +222,35 @@ async def get_all_generated_voices(
     """
     Get all generated voices for the current user across all their books.
     
-    This endpoint retrieves all ProcessedVoiceChunks with type CHAPTER_AUDIO for the current user,
-    sorted in ascending order by index, and includes S3 public links for each voice file.
+    Args:
+        project_id: Optional project ID to filter generated voices by. If provided, only returns 
+                   voices for books that are associated with the specified project.
+        skip: Number of records to skip for pagination
+        limit: Maximum number of records to return (1-1000)
+    
+    Returns:
+        List of processed voice chunks with CHAPTER_AUDIO type, sorted by index,
+        including S3 public links for each voice file.
     """
     try:
         # Query ProcessedVoiceChunks with type CHAPTER_AUDIO for this user
-        voice_chunks = db.query(ProcessedVoiceChunks).filter(
+        query = db.query(ProcessedVoiceChunks).filter(
             ProcessedVoiceChunks.user_id == current_user.id,
             ProcessedVoiceChunks.type == ProcessedVoiceChunksType.CHAPTER_AUDIO,
             ProcessedVoiceChunks.is_deleted == False
-        ).order_by(ProcessedVoiceChunks.index.asc()).offset(skip).limit(limit).all()
+        )
+        
+        # If project_id is provided, join with Book and filter by project
+        if project_id is not None:
+            from models.book import book_project_association
+            query = query.join(Book, ProcessedVoiceChunks.book_id == Book.id).join(
+                book_project_association, Book.id == book_project_association.c.book_id
+            ).filter(
+                book_project_association.c.project_id == project_id,
+                Book.is_deleted == False
+            )
+        
+        voice_chunks = query.order_by(ProcessedVoiceChunks.index.asc()).offset(skip).limit(limit).all()
         
         # Convert to response model with s3_links
         response_data = []
