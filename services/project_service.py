@@ -8,6 +8,8 @@ from typing import List, Optional
 from fastapi import HTTPException, status
 
 class ProjectService:
+    project_model = Project  # Add this line to expose the Project model
+
     @staticmethod
     def create_project(db: Session, user_id: int, project_data: ProjectCreate) -> Project:
         project = Project(
