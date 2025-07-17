@@ -6,6 +6,10 @@ from schemas.book import (
     BookRead,
     BookProjectAssociation,
     ProcessedBookData,
+    BookListResponse,
+    BookFilters,
+    BookSortField,
+    SortOrder,
 )
 from services.book_service import BookService
 from models.user import User
@@ -87,17 +91,60 @@ async def create_book(
 
 
 @router.get(
-    "/", response_model=List[BookRead], summary="Get all books for the current user"
+    "/",
+    response_model=BookListResponse,
+    summary="Get all books for the current user with filtering and sorting"
 )
 def get_books(
-    skip: int = 0,
-    limit: int = 100,
+    search: Optional[str] = None,
+    min_tokens: Optional[int] = None,
+    max_tokens: Optional[int] = None,
+    has_processing_job: Optional[bool] = None,
+    processing_status: Optional[str] = None,
+    project_id: Optional[int] = None,
+    sort_by: BookSortField = BookSortField.CREATED_AT,
+    sort_order: SortOrder = SortOrder.DESC,
+    page: int = 1,
+    page_size: int = 10,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Get all books for the current user"""
-    books = BookService.get_user_books(db, current_user.id, skip=skip, limit=limit)
-    return books
+    """
+    Get all books for the current user with filtering, sorting, and pagination.
+    
+    Parameters:
+    - **search**: Optional search term for title or author
+    - **min_tokens**: Optional minimum number of tokens
+    - **max_tokens**: Optional maximum number of tokens
+    - **has_processing_job**: Optional filter for books with processing jobs
+    - **processing_status**: Optional filter by processing job status (QUEUED, PROCESSING, COMPLETED, FAILED)
+    - **project_id**: Optional filter by project ID
+    - **sort_by**: Field to sort by (title, author, created_at, updated_at, estimated_tokens)
+    - **sort_order**: Sort order (asc, desc)
+    - **page**: Page number (default: 1)
+    - **page_size**: Items per page (default: 10, max: 100)
+    
+    Returns:
+    - **items**: List of books
+    - **total**: Total number of books matching filters
+    - **page**: Current page number
+    - **page_size**: Number of items per page
+    - **total_pages**: Total number of pages
+    """
+    filters = BookFilters(
+        search=search,
+        min_tokens=min_tokens,
+        max_tokens=max_tokens,
+        has_processing_job=has_processing_job,
+        processing_status=processing_status,
+        project_id=project_id,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size
+    )
+    
+    return BookService.get_user_books(db, current_user.id, filters)
 
 
 @router.get("/{book_id}", response_model=BookRead, summary="Get a specific book")

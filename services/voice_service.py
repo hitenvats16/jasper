@@ -1,12 +1,15 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, func, desc, asc
 from models.voice import Voice
 from models.default_voice import DefaultVoice
 from models.voice_job import VoiceProcessingJob, JobStatus
 from utils.message_publisher import message_publisher
 from core.config import settings
 from typing import List, Optional
+from schemas.voice import VoiceFilters, VoiceListResponse
 import logging
 from datetime import datetime
+import math
 
 logger = logging.getLogger(__name__)
 
@@ -106,30 +109,88 @@ class VoiceService:
             raise
     
     @staticmethod
-    def get_user_voices(db: Session, user_id: int, skip: int = 0, limit: int = 10) -> tuple[List[Voice], int]:
+    def get_user_voices(
+        db: Session,
+        user_id: int,
+        filters: VoiceFilters
+    ) -> VoiceListResponse:
         """
-        Get paginated list of voices for a user.
+        Get filtered, sorted, and paginated list of voices for a user.
         
         Args:
             db: Database session
             user_id: ID of the user
-            skip: Number of records to skip
-            limit: Maximum number of records to return
+            filters: Filter and sort parameters
             
         Returns:
-            tuple[List[Voice], int]: List of voices and total count
+            VoiceListResponse: Paginated list of voices with metadata
         """
-        total = db.query(Voice).filter(
+        # Start with base query
+        query = db.query(Voice).filter(
             Voice.user_id == user_id,
             Voice.is_deleted == False
-        ).count()
+        )
         
-        voices = db.query(Voice).filter(
-            Voice.user_id == user_id,
-            Voice.is_deleted == False
-        ).offset(skip).limit(limit).all()
+        # Apply search filter
+        if filters.search:
+            search_term = f"%{filters.search}%"
+            query = query.filter(
+                or_(
+                    Voice.name.ilike(search_term),
+                    Voice.description.ilike(search_term)
+                )
+            )
         
-        return voices, total
+        # Filter by default/custom voices
+        if filters.is_default is not None:
+            query = query.filter(Voice.is_default == filters.is_default)
+        
+        # Filter by processing job existence
+        if filters.has_processing_job is not None:
+            subquery = db.query(VoiceProcessingJob.voice_id).filter(
+                VoiceProcessingJob.is_deleted == False
+            ).distinct().subquery()
+            
+            if filters.has_processing_job:
+                query = query.filter(Voice.id.in_(subquery))
+            else:
+                query = query.filter(Voice.id.notin_(subquery))
+        
+        # Filter by processing status
+        if filters.processing_status:
+            subquery = db.query(VoiceProcessingJob.voice_id).filter(
+                VoiceProcessingJob.status == filters.processing_status,
+                VoiceProcessingJob.is_deleted == False
+            ).distinct().subquery()
+            query = query.filter(Voice.id.in_(subquery))
+        
+        # Get total count before pagination
+        total_count = query.count()
+        
+        # Apply sorting
+        sort_column = getattr(Voice, filters.sort_by.value)
+        if filters.sort_order == "desc":
+            query = query.order_by(desc(sort_column))
+        else:
+            query = query.order_by(asc(sort_column))
+        
+        # Apply pagination
+        offset = (filters.page - 1) * filters.page_size
+        query = query.offset(offset).limit(filters.page_size)
+        
+        # Execute query
+        voices = query.all()
+        
+        # Calculate total pages
+        total_pages = math.ceil(total_count / filters.page_size)
+        
+        return VoiceListResponse(
+            items=voices,
+            total=total_count,
+            page=filters.page,
+            page_size=filters.page_size,
+            total_pages=total_pages
+        )
     
     @staticmethod
     def get_voice_by_id(db: Session, voice_id: int, user_id: int) -> Optional[Voice]:

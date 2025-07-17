@@ -10,11 +10,23 @@ class JobStatus(str, Enum):
     COMPLETED = "COMPLETED"
     FAILED = "FAILED"
 
+class BookSortField(str, Enum):
+    TITLE = "title"
+    AUTHOR = "author"
+    CREATED_AT = "created_at"
+    UPDATED_AT = "updated_at"
+    ESTIMATED_TOKENS = "estimated_tokens"
+
+class SortOrder(str, Enum):
+    ASC = "asc"
+    DESC = "desc"
+
 class BookBase(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
     author: str = Field(..., min_length=1, max_length=255)
     data: Optional[Dict[str, Any]] = None
     s3_public_link: HttpUrl
+    estimated_tokens: Optional[int] = Field(default=0, description="Estimated number of tokens in the book")
 
 class BookCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)
@@ -76,7 +88,8 @@ class BookRead(BookBase):
             "created_at": obj.created_at,
             "updated_at": obj.updated_at,
             "s3_public_link": f"{settings.AWS_PUBLIC_URL}/{obj.s3_key}" if obj.s3_key else None,
-            "latest_processing_job": BookProcessingJobInfo.from_orm(latest_job) if latest_job else None
+            "latest_processing_job": BookProcessingJobInfo.from_orm(latest_job) if latest_job else None,
+            "estimated_tokens": obj.estimated_tokens if hasattr(obj, 'estimated_tokens') else 0
         }
         return cls(**obj_dict)
 
@@ -91,6 +104,7 @@ class ProcessedBookData(BaseModel):
     last_processing_job: Optional[Dict[str, Any]] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
+    estimated_tokens: Optional[int] = Field(default=0, description="Estimated number of tokens in the book")
 
     class Config:
         from_attributes = True
@@ -110,3 +124,27 @@ class BookWithProjects(BookRead):
         # Extract project IDs from the projects relationship if available
         if hasattr(self, 'projects') and self.projects:
             self.project_ids = [project.id for project in self.projects]
+
+class BookFilters(BaseModel):
+    """Query parameters for filtering books"""
+    search: Optional[str] = Field(None, description="Search term for title or author")
+    min_tokens: Optional[int] = Field(None, ge=0, description="Minimum number of tokens")
+    max_tokens: Optional[int] = Field(None, ge=0, description="Maximum number of tokens")
+    has_processing_job: Optional[bool] = Field(None, description="Filter books with processing jobs")
+    processing_status: Optional[JobStatus] = Field(None, description="Filter by processing job status")
+    project_id: Optional[int] = Field(None, description="Filter books by project")
+    sort_by: Optional[BookSortField] = Field(BookSortField.CREATED_AT, description="Field to sort by")
+    sort_order: Optional[SortOrder] = Field(SortOrder.DESC, description="Sort order (asc/desc)")
+    page: Optional[int] = Field(1, ge=1, description="Page number")
+    page_size: Optional[int] = Field(10, ge=1, le=100, description="Items per page")
+
+class BookListResponse(BaseModel):
+    """Response model for paginated book list"""
+    items: List[BookRead]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
+
+    class Config:
+        from_attributes = True

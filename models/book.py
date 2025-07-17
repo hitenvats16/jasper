@@ -13,6 +13,7 @@ from sqlalchemy import (
 from sqlalchemy.orm import relationship
 from db.session import Base
 from core.config import settings
+from utils.text import count_tokens
 
 # Association table for linking books to projects (optional relationship)
 book_project_association = Table(
@@ -51,3 +52,15 @@ class Book(Base):
     def s3_public_link(self):
         """Returns the public AWS S3 URL for this voice file."""
         return f"{settings.AWS_PUBLIC_URL}/{self.s3_key}"
+    
+    @property
+    def estimated_tokens(self):
+        """Returns the estimated number of tokens for this book."""
+        chapters = self.data.get("chapters", [])
+        tokens = 0
+        for chapter in chapters:
+            sections = chapter.get("sections", [])
+            for section in sections:
+                content = section.get("content", "")
+                tokens += count_tokens(content)
+        return tokens

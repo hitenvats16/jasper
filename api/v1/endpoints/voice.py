@@ -1,7 +1,14 @@
 from fastapi import APIRouter, status, Depends, File, UploadFile, Form, HTTPException, Request, Query
 from sqlalchemy.orm import Session
 from schemas.voice_job import VoiceProcessingJobRead
-from schemas.voice import VoiceUpdate, VoiceRead, VoiceList
+from schemas.voice import (
+    VoiceUpdate,
+    VoiceRead,
+    VoiceListResponse,
+    VoiceFilters,
+    VoiceSortField,
+    SortOrder,
+)
 from models.voice_job import VoiceProcessingJob, JobStatus
 from models.voice import Voice
 from utils.s3 import upload_file_to_s3, delete_file_from_s3
@@ -83,17 +90,27 @@ def list_voice_jobs(
 
 @router.get(
     "/list",
-    response_model=VoiceList,
+    response_model=VoiceListResponse,
     status_code=status.HTTP_200_OK,
-    summary="List user's voices",
+    summary="List user's voices with filtering and sorting",
     description="""
-    Retrieve a paginated list of the user's voice samples.
+    Retrieve a filtered, sorted, and paginated list of the user's voice samples.
     
-    - Supports pagination with skip and limit parameters
-    - Returns total count of available voices
-    - Includes basic voice information
+    **Filtering Options:**
+    - Search by name or description
+    - Filter default/custom voices
+    - Filter by processing job status
+    - Filter voices with/without processing jobs
     
-    **Note:** Results are ordered by creation date (newest first)
+    **Sorting Options:**
+    - Sort by name, creation date, or last update
+    - Ascending or descending order
+    
+    **Pagination:**
+    - Page number and size control
+    - Returns total count and pages
+    
+    **Note:** Results are ordered by creation date (newest first) by default
     """,
     responses={
         200: {"description": "Successfully retrieved voice list"},
@@ -102,25 +119,47 @@ def list_voice_jobs(
     tags=["Voice Management"]
 )
 def list_voices(
-    skip: int = Query(0, ge=0, description="Number of records to skip"),
-    limit: int = Query(10, ge=1, le=100, description="Maximum number of records to return"),
+    search: Optional[str] = Query(None, description="Search term for name or description"),
+    is_default: Optional[bool] = Query(None, description="Filter default/custom voices"),
+    has_processing_job: Optional[bool] = Query(None, description="Filter voices with processing jobs"),
+    processing_status: Optional[str] = Query(None, description="Filter by processing job status"),
+    sort_by: VoiceSortField = Query(VoiceSortField.CREATED_AT, description="Field to sort by"),
+    sort_order: SortOrder = Query(SortOrder.DESC, description="Sort order (asc/desc)"),
+    page: int = Query(1, ge=1, description="Page number"),
+    page_size: int = Query(10, ge=1, le=100, description="Items per page"),
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """
-    List all voices for the authenticated user with pagination.
+    List all voices for the authenticated user with filtering, sorting, and pagination.
     
     Args:
-        skip: Number of records to skip (for pagination)
-        limit: Maximum number of records to return
+        search: Optional search term for name or description
+        is_default: Optional filter for default/custom voices
+        has_processing_job: Optional filter for voices with processing jobs
+        processing_status: Optional filter by processing job status
+        sort_by: Field to sort by (name, created_at, updated_at)
+        sort_order: Sort order (asc, desc)
+        page: Page number (default: 1)
+        page_size: Items per page (default: 10, max: 100)
         db: Database session
         current_user: Current authenticated user
     
     Returns:
-        VoiceList: Paginated list of voices with total count
+        VoiceListResponse: Paginated list of voices with metadata
     """
-    voices, total = VoiceService.get_user_voices(db, current_user.id, skip, limit)
-    return {"items": voices, "total": total}
+    filters = VoiceFilters(
+        search=search,
+        is_default=is_default,
+        has_processing_job=has_processing_job,
+        processing_status=processing_status,
+        sort_by=sort_by,
+        sort_order=sort_order,
+        page=page,
+        page_size=page_size
+    )
+    
+    return VoiceService.get_user_voices(db, current_user.id, filters)
 
 @router.post(
     "/create",

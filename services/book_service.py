@@ -1,14 +1,16 @@
 from sqlalchemy.orm import Session
+from sqlalchemy import or_, func, desc, asc
 from models.book import Book
 from models.project import Project
 from models.user import User
 from models.book_processing_job import BookProcessingJob
 from models.voice_job import JobStatus
-from schemas.book import BookCreate, BookUpdate
-from typing import Optional, List, Dict, Any
+from schemas.book import BookCreate, BookUpdate, BookFilters, BookListResponse, BookSortField, SortOrder
+from typing import Optional, List, Dict, Any, Tuple
 from fastapi import HTTPException, status
 import uuid
 import os
+import math
 
 class BookService:
     @staticmethod
@@ -34,11 +36,96 @@ class BookService:
         ).first()
 
     @staticmethod
-    def get_user_books(db: Session, user_id: int, skip: int = 0, limit: int = 100) -> List[Book]:
-        return db.query(Book).filter(
+    def get_user_books(
+        db: Session,
+        user_id: int,
+        filters: BookFilters
+    ) -> BookListResponse:
+        """
+        Get user's books with filtering, sorting, and pagination.
+        
+        Args:
+            db: Database session
+            user_id: ID of the user
+            filters: Filter parameters
+            
+        Returns:
+            BookListResponse containing paginated results and metadata
+        """
+        # Start with base query
+        query = db.query(Book).filter(
             Book.user_id == user_id,
             Book.is_deleted == False
-        ).offset(skip).limit(limit).all()
+        )
+        
+        # Apply search filter
+        if filters.search:
+            search_term = f"%{filters.search}%"
+            query = query.filter(
+                or_(
+                    Book.title.ilike(search_term),
+                    Book.author.ilike(search_term)
+                )
+            )
+        
+        # Apply token filters
+        if filters.min_tokens is not None:
+            query = query.filter(Book.estimated_tokens >= filters.min_tokens)
+        if filters.max_tokens is not None:
+            query = query.filter(Book.estimated_tokens <= filters.max_tokens)
+        
+        # Apply processing job filters
+        if filters.has_processing_job is not None:
+            subquery = db.query(BookProcessingJob.book_id).filter(
+                BookProcessingJob.is_deleted == False
+            ).distinct().subquery()
+            
+            if filters.has_processing_job:
+                query = query.filter(Book.id.in_(subquery))
+            else:
+                query = query.filter(Book.id.notin_(subquery))
+        
+        if filters.processing_status:
+            subquery = db.query(BookProcessingJob.book_id).filter(
+                BookProcessingJob.status == filters.processing_status,
+                BookProcessingJob.is_deleted == False
+            ).distinct().subquery()
+            query = query.filter(Book.id.in_(subquery))
+        
+        # Apply project filter
+        if filters.project_id is not None:
+            query = query.join(Book.projects).filter(
+                Project.id == filters.project_id,
+                Project.is_deleted == False
+            )
+        
+        # Get total count before pagination
+        total_count = query.count()
+        
+        # Apply sorting
+        sort_column = getattr(Book, filters.sort_by.value)
+        if filters.sort_order == SortOrder.DESC:
+            query = query.order_by(desc(sort_column))
+        else:
+            query = query.order_by(asc(sort_column))
+        
+        # Apply pagination
+        offset = (filters.page - 1) * filters.page_size
+        query = query.offset(offset).limit(filters.page_size)
+        
+        # Execute query
+        books = query.all()
+        
+        # Calculate total pages
+        total_pages = math.ceil(total_count / filters.page_size)
+        
+        return BookListResponse(
+            items=books,
+            total=total_count,
+            page=filters.page,
+            page_size=filters.page_size,
+            total_pages=total_pages
+        )
 
     @staticmethod
     def get_processed_book_data(db: Session, book_id: int, user_id: int) -> Optional[Dict[str, Any]]:
