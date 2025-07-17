@@ -22,6 +22,39 @@ logger = logging.getLogger(__name__)
 # In-memory store for verification codes (for demo; use Redis in prod)
 verification_codes = {}
 
+def delete_user(db: Session, user_id: int) -> User:
+    """
+    Soft delete a user account.
+    
+    Args:
+        db: Database session
+        user_id: ID of the user to delete
+        
+    Returns:
+        User: The deleted user object
+        
+    Raises:
+        ValueError: If user not found
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("User not found")
+        
+    # Perform soft delete
+    user.is_deleted = True
+    user.is_active = False
+    user.deleted_at = datetime.now(timezone.utc)
+    
+    # Clear sensitive/personal data
+    user.hashed_password = None
+    user.profile_picture = None
+    user.first_name = None
+    user.last_name = None
+    
+    db.commit()
+    db.refresh(user)
+    return user
+
 def create_default_config(db: Session, user_id: int):
     """Create a default config for a new user."""
     try:
@@ -118,7 +151,7 @@ def verify_email(db: Session, email: str, code: str):
     return user
 
 def authenticate_user(db: Session, email: str, password: str) -> Optional[User]:
-    user = db.query(User).filter(User.email == email).first()
+    user = db.query(User).filter(User.email == email, User.is_deleted == False).first()
     if not user or not user.hashed_password:
         return None
     if not verify_password(password, user.hashed_password):

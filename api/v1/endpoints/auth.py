@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from db.session import SessionLocal, get_db
 from schemas.auth import RegisterRequest, LoginRequest, EmailVerificationRequest, Token
 from schemas.user import UserRead, UserUpdate
-from services.auth_service import register_user, verify_email, authenticate_user, get_or_create_user_by_google_oauth
+from services.auth_service import register_user, verify_email, authenticate_user, get_or_create_user_by_google_oauth, delete_user
 from core.security import create_access_token, decode_access_token
 from core.config import settings
 from typing import Any
@@ -328,6 +328,58 @@ def update_me(update: UserUpdate, db: Session = Depends(get_db), current_user: U
     db.commit()
     db.refresh(user)
     return user
+
+@router.delete(
+    "/me",
+    response_model=UserRead,
+    status_code=status.HTTP_200_OK,
+    summary="Delete current user account",
+    description="""
+    Soft delete the authenticated user's account.
+    
+    - Requires valid JWT token
+    - Performs soft deletion (data is preserved but inaccessible)
+    - Clears personal information
+    - Account cannot be recovered after deletion
+    - Returns the deleted user profile
+    
+    **Note:** This is a permanent action and cannot be undone
+    """,
+    responses={
+        200: {"description": "Successfully deleted user account"},
+        401: {"description": "Invalid or expired token"},
+        404: {"description": "User not found"}
+    },
+    tags=["Authentication"]
+)
+def delete_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Delete the authenticated user's account.
+    
+    Args:
+        db: Database session
+        current_user: Currently authenticated user
+    
+    Returns:
+        UserRead: The deleted user profile
+        
+    Raises:
+        HTTPException: If user not found or already deleted
+    """
+    try:
+        if current_user.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account already deleted"
+            )
+        
+        deleted_user = delete_user(db, current_user.id)
+        return deleted_user
+    except ValueError as e:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
 
 # Google OAuth endpoints would go here (initiate, callback)
 # For brevity, not implemented in this snippet 

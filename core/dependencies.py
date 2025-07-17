@@ -59,7 +59,7 @@ async def get_current_user(
         db_start = time.time()
         try:
             # Use a more efficient query with timeout
-            user = db.query(User).filter(User.id == payload["user_id"]).first()
+            user = db.query(User).filter(User.id == payload["user_id"], User.is_deleted == False).first()
             db_time = time.time() - db_start
             logger.info(f"📊 Database user query took {db_time:.3f}s")
             
@@ -121,7 +121,7 @@ async def get_optional_user(
         db_start = time.time()
         try:
             # Use a more efficient query
-            user = db.query(User).filter(User.id == payload["user_id"]).first()
+            user = db.query(User).filter(User.id == payload["user_id"], User.is_deleted == False).first()
             db_time = time.time() - db_start
             logger.info(f"📊 Optional database user query took {db_time:.3f}s")
         except Exception as e:

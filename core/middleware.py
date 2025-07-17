@@ -22,7 +22,7 @@ def get_current_user_from_request(request: Request) -> Optional[User]:
             
         db = SessionLocal()
         try:
-            user = db.query(User).filter_by(id=payload["user_id"]).first()
+            user = db.query(User).filter_by(id=payload["user_id"], is_deleted=False).first()
             return user
         finally:
             db.close()
