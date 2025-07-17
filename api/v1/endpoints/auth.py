@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from db.session import SessionLocal, get_db
 from schemas.auth import RegisterRequest, LoginRequest, EmailVerificationRequest, Token
 from schemas.user import UserRead, UserUpdate
-from services.auth_service import register_user, verify_email, authenticate_user, get_or_create_user_by_google_oauth, delete_user
+from services.auth_service import register_user, verify_email, authenticate_user, get_or_create_user_by_google_oauth, delete_user, hard_delete_user
 from core.security import create_access_token, decode_access_token
 from core.config import settings
 from typing import Any
@@ -378,6 +378,58 @@ def delete_me(db: Session = Depends(get_db), current_user: User = Depends(get_cu
     except ValueError as e:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
+            detail=str(e)
+        )
+
+@router.delete(
+    "/me/hard",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Permanently delete user account",
+    description="""
+    Permanently delete the authenticated user's account and all associated data.
+    
+    - Requires valid JWT token
+    - Permanently deletes all user data from the database
+    - Deletes all associated files from S3 storage
+    - This action CANNOT be undone
+    - All data will be permanently lost
+    
+    **Warning:** This is a destructive action that cannot be reversed.
+    Make sure to backup any important data before proceeding.
+    """,
+    responses={
+        204: {"description": "Successfully deleted user account and all data"},
+        401: {"description": "Invalid or expired token"},
+        404: {"description": "User not found"},
+        500: {"description": "Failed to delete user data"}
+    },
+    tags=["Authentication"]
+)
+async def hard_delete_me(db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+    """
+    Permanently delete the authenticated user's account and all associated data.
+    
+    Args:
+        db: Database session
+        current_user: Currently authenticated user
+    
+    Returns:
+        None
+        
+    Raises:
+        HTTPException: If deletion fails or user not found
+    """
+    try:
+        await hard_delete_user(db, current_user.id)
+        return Response(status_code=status.HTTP_204_NO_CONTENT)
+    except ValueError as e:
+        if "User not found" in str(e):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=str(e)
+            )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=str(e)
         )
 

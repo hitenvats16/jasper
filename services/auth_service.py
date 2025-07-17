@@ -11,6 +11,17 @@ from services.credit_service import CreditService
 from models.rate import Rate
 from clients.fal import FalModels
 from workers.audio_generation.enums import SilencingStrategies
+from utils.s3 import delete_s3_objects_with_prefix
+from models.book import Book
+from models.voice import Voice
+from models.project import Project
+from models.credit import UserCredit
+from models.payment import Payment, PaymentRefund
+from models.voice_job import VoiceProcessingJob
+from models.book_processing_job import BookProcessingJob
+from models.book_voice_processing_job import BookVoiceProcessingJob
+from models.processed_voice_chunks import ProcessedVoiceChunks
+from models.voice_embedding import VoiceEmbedding
 import random, string
 import httpx
 from datetime import datetime, timezone, timedelta
@@ -21,6 +32,82 @@ logger = logging.getLogger(__name__)
 
 # In-memory store for verification codes (for demo; use Redis in prod)
 verification_codes = {}
+
+async def hard_delete_user(db: Session, user_id: int) -> None:
+    """
+    Permanently delete all user data from database and S3.
+    
+    Args:
+        db: Database session
+        user_id: ID of the user to delete
+        
+    Raises:
+        ValueError: If user not found
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise ValueError("User not found")
+    
+    try:
+        # Delete S3 data first
+        # Delete voice files
+        for voice in user.voices:
+            if voice.s3_key:
+                await delete_s3_objects_with_prefix(voice.s3_key)
+        
+        # Delete book files
+        for book in user.books:
+            if book.s3_key:
+                await delete_s3_objects_with_prefix(book.s3_key)
+        
+        # Delete processed voice chunks
+        for chunk in user.processed_voice_chunks:
+            if chunk.s3_key:
+                await delete_s3_objects_with_prefix(chunk.s3_key)
+        
+        # Explicitly delete all related data in order to handle any potential foreign key constraints
+        
+        # Delete OAuth accounts
+        db.query(OAuthAccount).filter(OAuthAccount.user_id == user_id).delete()
+        
+        # Delete voice-related data
+        db.query(VoiceEmbedding).filter(VoiceEmbedding.voice_id.in_(
+            db.query(Voice.id).filter(Voice.user_id == user_id)
+        )).delete(synchronize_session=False)
+        db.query(Voice).filter(Voice.user_id == user_id).delete()
+        
+        # Delete book-related data
+        db.query(BookProcessingJob).filter(BookProcessingJob.user_id == user_id).delete()
+        db.query(BookVoiceProcessingJob).filter(BookVoiceProcessingJob.user_id == user_id).delete()
+        db.query(Book).filter(Book.user_id == user_id).delete()
+        
+        # Delete project data
+        db.query(Project).filter(Project.user_id == user_id).delete()
+        
+        # Delete voice processing data
+        db.query(VoiceProcessingJob).filter(VoiceProcessingJob.user_id == user_id).delete()
+        db.query(ProcessedVoiceChunks).filter(ProcessedVoiceChunks.user_id == user_id).delete()
+        
+        # Delete payment and credit data
+        db.query(PaymentRefund).filter(PaymentRefund.user_id == user_id).delete()
+        db.query(Payment).filter(Payment.user_id == user_id).delete()
+        db.query(UserCredit).filter(UserCredit.user_id == user_id).delete()
+        
+        # Delete rate and config
+        db.query(Rate).filter(Rate.user_id == user_id).delete()
+        db.query(Config).filter(Config.user_id == user_id).delete()
+        
+        # Finally delete the user
+        db.query(User).filter(User.id == user_id).delete()
+        
+        # Commit all changes
+        db.commit()
+        
+        logger.info(f"Successfully hard deleted user {user_id} and all associated data")
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to hard delete user {user_id}: {str(e)}")
+        raise ValueError(f"Failed to delete user data: {str(e)}")
 
 def delete_user(db: Session, user_id: int) -> User:
     """
