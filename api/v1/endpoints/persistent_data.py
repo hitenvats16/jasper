@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.orm import Session
 from schemas.persistent_data import PersistentDataCreate, PersistentDataRead
 from services.persistent_data_service import PersistentDataService
@@ -112,3 +112,52 @@ def upsert_data(
         )
     
     return PersistentDataService.upsert_data(db, current_user.id, data_in) 
+
+@router.delete(
+    "/{key}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete persistent data",
+    description="""
+    Permanently delete persistent data for the authenticated user.
+    
+    - Requires authentication
+    - Permanently deletes data associated with the provided key
+    - Returns 204 on successful deletion
+    - Returns 404 if no data found for the key
+    
+    **Warning:** This is a permanent deletion and cannot be undone
+    
+    **Note:** Each user's data is isolated and can only be deleted by that user
+    """,
+    responses={
+        204: {"description": "Successfully deleted data"},
+        401: {"description": "Unauthorized - Invalid or expired token"},
+        404: {"description": "Data not found for the given key"}
+    }
+)
+def delete_data(
+    key: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    """
+    Delete persistent data by key for the authenticated user.
+    
+    Args:
+        key: The key of the data to delete
+        db: Database session
+        current_user: Currently authenticated user
+    
+    Returns:
+        None
+        
+    Raises:
+        HTTPException: If data not found
+    """
+    deleted = PersistentDataService.delete_data(db, current_user.id, key)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"No data found for key: {key}"
+        )
+    return Response(status_code=status.HTTP_204_NO_CONTENT) 

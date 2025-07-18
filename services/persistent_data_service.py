@@ -60,4 +60,25 @@ class PersistentDataService:
         db.add(db_data)
         db.commit()
         db.refresh(db_data)
-        return db_data 
+        return db_data
+
+    @staticmethod
+    def delete_data(db: Session, user_id: int, key: str) -> bool:
+        """
+        Permanently delete persistent data by key for a user.
+        
+        Args:
+            db: Database session
+            user_id: ID of the user
+            key: Data key
+            
+        Returns:
+            bool: True if data was deleted, False if not found
+        """
+        result = db.query(PersistentData).filter(
+            PersistentData.user_id == user_id,
+            PersistentData.key == key
+        ).delete()
+        
+        db.commit()
+        return result > 0 
