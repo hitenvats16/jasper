@@ -36,6 +36,8 @@ class User(Base):
     refunds = relationship("PaymentRefund", back_populates="user", cascade="all, delete-orphan", lazy="select")
     # Rate relationship
     rate = relationship("Rate", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="select")
+    # Persistent data relationship
+    persistent_data = relationship("PersistentData", back_populates="user", cascade="all, delete-orphan", lazy="select")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_account"

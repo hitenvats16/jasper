@@ -5,3 +5,4 @@ from .project import router as project_router
 from .book import router as book_router
 from .voice_generation import router as voice_generation_router
 from .config import router as config_router
+from .persistent_data import router as persistent_data_router
