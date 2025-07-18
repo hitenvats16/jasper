@@ -165,8 +165,8 @@ class BookService:
             "last_processing_job": {
                 "id": latest_job.id,
                 "status": latest_job.status.value if latest_job else None,
-                "created_at": latest_job.created_at.isoformat() if latest_job else None,
-                "updated_at": latest_job.updated_at.isoformat() if latest_job else None,
+                "created_at": latest_job.created_at.isoformat() if latest_job and latest_job.created_at else None,
+                "updated_at": latest_job.updated_at.isoformat() if latest_job and latest_job.updated_at else None,
                 "data": latest_job.data if latest_job else None
             } if latest_job else None,
             "created_at": book.created_at,
