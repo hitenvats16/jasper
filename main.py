@@ -16,7 +16,7 @@ from models.user import User
 import logging
 import sys
 from utils.message_publisher import get_rabbitmq_connection
-from api.v1.endpoints import config_router
+from api.v1.endpoints import config_router, voice_generation_router
 import time
 
 # Configure logging
@@ -352,6 +352,13 @@ app.include_router(
     persistent_data_router,
     prefix="/api/v1/persistent-data",
     tags=["Persistent Data"],
+    dependencies=[Depends(get_rate_limit)]
+)
+
+app.include_router(
+    voice_generation_router,
+    prefix="/api/v1/voice-generation",
+    tags=["Voice Generation"],
     dependencies=[Depends(get_rate_limit)]
 )
 

@@ -1,8 +1,11 @@
-from pydantic import BaseModel, Field, HttpUrl
+from pydantic import BaseModel, Field, HttpUrl, field_validator
 from typing import Optional, Dict, Any, List
 from datetime import datetime
 from enum import Enum
 from core.config import settings
+from db.session import SessionLocal
+from models.voice import Voice
+from fastapi import HTTPException, status
 
 class JobStatus(str, Enum):
     QUEUED = "QUEUED"
@@ -148,3 +151,108 @@ class BookListResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EmotionType(str, Enum):
+    HAPPY = "happy"
+    SAD = "sad"
+    NEUTRAL = "neutral"
+    DEFAULT = "default"
+
+class CommandType(str, Enum):
+    SPEAKER_CHANGE = "speaker_change"
+    EMOTION_CHANGE = "emotion_change"
+
+class ContentPosition(BaseModel):
+    start: int = Field(..., ge=0)  # Must be non-negative integer
+    end: int = Field(..., ge=0)    # Must be non-negative integer
+
+    @field_validator('end')
+    @classmethod
+    def end_must_be_greater_than_start(cls, v: int, info) -> int:
+        if 'start' in info.data and v < info.data['start']:
+            raise ValueError('end index must be greater than or equal to start index')
+        return v
+
+class ChapterCommand(BaseModel):
+    id: str
+    command_type: CommandType
+    content_position: ContentPosition
+    voice_id: Optional[int] = Field(None, description="Required if command_type is speaker_change")
+    emotion: Optional[EmotionType] = Field(None, description="Required if command_type is emotion_change")
+
+    @field_validator('voice_id')
+    @classmethod
+    def voice_id_required_and_valid(cls, v: Optional[int], info) -> Optional[int]:
+        if info.data.get('command_type') == CommandType.SPEAKER_CHANGE:
+            if v is None:
+                raise ValueError('voice_id is required for speaker_change command')
+            
+            # Check if voice exists in database
+            db = SessionLocal()
+            try:
+                voice = db.query(Voice).filter(
+                    Voice.id == v,
+                    Voice.is_deleted == False
+                ).first()
+                
+                if not voice:
+                    raise ValueError(f'Voice with id {v} not found or is deleted')
+                
+                return v
+            finally:
+                db.close()
+        return v
+
+    @field_validator('emotion')
+    @classmethod
+    def emotion_required_for_emotion_change(cls, v: Optional[EmotionType], info) -> Optional[EmotionType]:
+        if info.data.get('command_type') == CommandType.EMOTION_CHANGE and v is None:
+            raise ValueError('emotion is required for emotion_change command')
+        emotions = [emotion.value for emotion in EmotionType]
+        if v not in emotions:
+            raise ValueError(f'Invalid emotion: {v}. Must be one of {emotions}')
+        return v
+
+class ChapterData(BaseModel):
+    chapter_id: str
+    chapter_title: str
+    content: str
+
+class BookDataProcessingJob(BaseModel):
+    title: str
+    author: str
+    chapters: List[ChapterData]
+    config: Optional[Dict[str, List[ChapterCommand]]] = Field(
+        default=None,
+        description="Configuration for chapter processing. Key is chapter_id, value is list of commands."
+    )
+
+    @field_validator('config')
+    @classmethod
+    def validate_config_chapter_ids(cls, v: Optional[Dict[str, List[ChapterCommand]]], info) -> Optional[Dict[str, List[ChapterCommand]]]:
+        if v is not None:
+            # Get list of chapter_ids from chapters
+            chapters = info.data.get('chapters', [])
+            chapter_ids = [chapter.chapter_id for chapter in chapters]
+            
+            # Check if all config keys are valid chapter_ids
+            for chapter_id in v.keys():
+                if chapter_id not in chapter_ids:
+                    raise ValueError(f'Config contains invalid chapter_id: {chapter_id}')
+            
+            # Validate content positions for each command
+            for chapter_id, commands in v.items():
+                chapter = next(c for c in chapters if c.chapter_id == chapter_id)
+                content_length = len(chapter.content)
+                
+                for command in commands:
+                    if command.content_position.end > content_length:
+                        raise ValueError(
+                            f'Content position end index {command.content_position.end} '
+                            f'exceeds chapter content length {content_length} '
+                            f'for chapter {chapter_id}'
+                        )
+        
+        return v
+

@@ -21,6 +21,7 @@ class Voice(Base):
 
     # Relationships
     user = relationship("User", back_populates="voices", lazy="select")
+    audio_generation_jobs = relationship("AudioGenerationJob", back_populates="voice", lazy="select")
 
     @property
     def s3_public_link(self) -> str:
