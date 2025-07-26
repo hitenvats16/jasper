@@ -14,8 +14,8 @@ class Voice(Base):
     s3_key = Column(String, nullable=False)  # S3 key for file storage
     user_id = Column(Integer, ForeignKey("user.id"), nullable=False)  # User who generated
     voice_metadata = Column(JSON, nullable=True)  # JSON metadata storage
-    created_at = Column(DateTime(timezone=True), server_default=func.now(), default=datetime.now(timezone.utc))
-    updated_at = Column(DateTime(timezone=True), onupdate=func.now(), default=datetime.now(timezone.utc))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     is_deleted = Column(Boolean, default=False)
     is_default = Column(Boolean, default=False)
 

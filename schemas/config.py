@@ -1,6 +1,6 @@
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, field_validator, model_validator, Field
 from typing import Optional, Dict, Any, Union
-from datetime import datetime
+from datetime import datetime, timezone
 from workers.audio_generation.enums import SilencingStrategies
 
 class AdaptiveSilenceData(BaseModel):
@@ -18,6 +18,8 @@ class ConfigBase(BaseModel):
     silence_data: Optional[Union[AdaptiveSilenceData, FixedSilenceData, Dict[str, Any]]] = None
     tts_model_data: Optional[Dict[str, Any]] = None
     sample_rate: Optional[int] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
 
     @field_validator('silence_strategy')
     @classmethod

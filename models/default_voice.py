@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Boolean, func
 from db.session import Base
 from datetime import datetime
 
@@ -10,5 +10,5 @@ class DefaultVoice(Base):
     description = Column(String, nullable=True)
     s3_key = Column(String, nullable=False)
     is_public = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    updated_at = Column(DateTime, onupdate=datetime.utcnow) 
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now()) 

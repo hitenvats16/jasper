@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, HttpUrl
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from datetime import datetime
 from enum import Enum
 from core.config import settings
 from schemas.book import BookProcessingJobInfo
@@ -60,6 +60,11 @@ class ProjectBase(BaseModel):
     description: Optional[str] = None
     tags: Optional[List[str]] = None
     data: Optional[Dict[str, Any]] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class ProjectCreate(ProjectBase):
     book_id: Optional[int] = None  # Optional book ID to associate with project

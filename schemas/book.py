@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, HttpUrl, field_validator
+from datetime import datetime, timezone
 from typing import Optional, Dict, Any, List
-from datetime import datetime
 from enum import Enum
 from core.config import settings
 from db.session import SessionLocal
@@ -30,6 +30,11 @@ class BookBase(BaseModel):
     data: Optional[Dict[str, Any]] = None
     s3_public_link: HttpUrl
     estimated_tokens: Optional[int] = Field(default=0, description="Estimated number of tokens in the book")
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class BookCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=255)

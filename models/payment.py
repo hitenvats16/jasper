@@ -33,6 +33,7 @@ class PaymentPlan(Base):
     lemon_squeezy_product_id = Column(String, nullable=False)  # LemonSqueezy product ID
     is_active = Column(Boolean, default=True)
     is_deleted = Column(Boolean, default=False)
+    expires_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     

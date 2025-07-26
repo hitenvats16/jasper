@@ -1,4 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 
@@ -19,6 +20,9 @@ class UserBase(BaseModel):
     email: EmailStr
     is_active: bool = True
     is_verified: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
 
 class UserCreate(UserBase):
     password: str

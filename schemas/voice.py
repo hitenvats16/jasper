@@ -1,6 +1,6 @@
 from pydantic import BaseModel, HttpUrl, Field
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional, List
-from datetime import datetime
 from enum import Enum
 
 class VoiceSortField(str, Enum):
@@ -18,6 +18,11 @@ class VoiceBase(BaseModel):
     voice_metadata: Optional[Dict[str, Any]] = None
     is_deleted: bool = False
     is_default: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class VoiceCreate(VoiceBase):
     pass

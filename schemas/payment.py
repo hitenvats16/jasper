@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field
+from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
-from datetime import datetime
 from models.payment import PlanType, PaymentStatus, RefundStatus
 
 # Plan Schemas
@@ -51,6 +51,11 @@ class PaymentBase(BaseModel):
     status: PaymentStatus = PaymentStatus.PENDING
     credits_added: int = Field(ge=0)
     payment_metadata: Optional[Dict[str, Any]] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
 
 class PaymentCreate(PaymentBase):
     user_id: int

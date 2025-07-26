@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field, field_validator
-from datetime import datetime
+from datetime import datetime, timezone
 from models.job_status import JobStatus
 from typing import Optional, Dict, Any, List
 from enum import Enum
@@ -137,7 +137,7 @@ class AudioGenerationResponse(BaseModel):
     """Response model for audio generation job creation"""
     job_id: int
     status: JobStatus
-    created_at: datetime
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     s3_url: HttpUrl
 
     class Config:
