@@ -1,10 +1,9 @@
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, field_validator, HttpUrl
 from datetime import datetime, timezone
 from models.job_status import JobStatus
 from typing import Optional, Dict, Any, List
 from enum import Enum
 from schemas.book import BookDataProcessingJob
-from pydantic import HttpUrl
 
 class Language(str, Enum):
     CHINESE = "Chinese"
@@ -139,6 +138,57 @@ class AudioGenerationResponse(BaseModel):
     status: JobStatus
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     s3_url: HttpUrl
+
+    class Config:
+        from_attributes = True 
+
+class SortOrder(str, Enum):
+    ASC = "asc"
+    DESC = "desc"
+
+class AudioJobSortField(str, Enum):
+    CREATED_AT = "created_at"
+    ENDED_AT = "ended_at"
+    STATUS = "status"
+    PROJECT_ID = "project_id"
+
+class AudioGenerationJobRead(BaseModel):
+    id: int
+    user_id: int
+    project_id: Optional[int] = None
+    voice_id: int
+    input_data_s3_key: str
+    job_metadata: Optional[Dict[str, Any]] = None
+    result: Optional[Dict[str, Any]] = None
+    status: JobStatus
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    ended_at: Optional[datetime] = None
+
+    class Config:
+        from_attributes = True
+
+class AudioGenerationJobFilters(BaseModel):
+    """Query parameters for filtering audio generation jobs"""
+    project_id: Optional[int] = Field(None, description="Filter by project ID")
+    voice_id: Optional[int] = Field(None, description="Filter by voice ID")
+    status: Optional[JobStatus] = Field(None, description="Filter by job status")
+    language: Optional[Language] = Field(None, description="Filter by language boost setting")
+    created_after: Optional[datetime] = Field(None, description="Filter jobs created after this datetime")
+    created_before: Optional[datetime] = Field(None, description="Filter jobs created before this datetime")
+    ended_after: Optional[datetime] = Field(None, description="Filter jobs that ended after this datetime")
+    ended_before: Optional[datetime] = Field(None, description="Filter jobs that ended before this datetime")
+    sort_by: Optional[AudioJobSortField] = Field(AudioJobSortField.CREATED_AT, description="Field to sort by")
+    sort_order: Optional[SortOrder] = Field(SortOrder.DESC, description="Sort order (asc/desc)")
+    page: Optional[int] = Field(1, ge=1, description="Page number")
+    page_size: Optional[int] = Field(10, ge=1, le=100, description="Items per page")
+
+class AudioGenerationJobListResponse(BaseModel):
+    """Response model for paginated audio generation job list"""
+    items: List[AudioGenerationJobRead]
+    total: int
+    page: int
+    page_size: int
+    total_pages: int
 
     class Config:
         from_attributes = True 

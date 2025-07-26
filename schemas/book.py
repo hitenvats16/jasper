@@ -5,7 +5,7 @@ from enum import Enum
 from core.config import settings
 from db.session import SessionLocal
 from models.voice import Voice
-from fastapi import HTTPException, status
+from utils.s3 import get_presigned_url
 
 class JobStatus(str, Enum):
     QUEUED = "QUEUED"
@@ -95,7 +95,7 @@ class BookRead(BookBase):
             "user_id": obj.user_id,
             "created_at": obj.created_at,
             "updated_at": obj.updated_at,
-            "s3_public_link": f"{settings.AWS_PUBLIC_URL}/{obj.s3_key}" if obj.s3_key else None,
+            "s3_public_link": get_presigned_url(obj.s3_key),
             "latest_processing_job": BookProcessingJobInfo.from_orm(latest_job) if latest_job else None,
             "estimated_tokens": obj.estimated_tokens if hasattr(obj, 'estimated_tokens') else 0
         }

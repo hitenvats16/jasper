@@ -4,6 +4,7 @@ from typing import Optional, List, Dict, Any
 from enum import Enum
 from core.config import settings
 from schemas.book import BookProcessingJobInfo
+from utils.s3 import get_presigned_url
 
 class SortOrder(str, Enum):
     asc = "asc"
@@ -48,7 +49,7 @@ class BookInProject(BaseModel):
             "title": obj.title,
             "author": obj.author,
             "s3_key": obj.s3_key,
-            "s3_public_link": f"{settings.AWS_PUBLIC_URL}/{obj.s3_key}" if obj.s3_key else None,
+            "s3_public_link": get_presigned_url(obj.s3_key),
             "created_at": obj.created_at,
             "updated_at": obj.updated_at,
             "latest_processing_job": BookProcessingJobInfo.from_orm(latest_job) if latest_job else None

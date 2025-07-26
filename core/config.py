@@ -12,14 +12,6 @@ class Settings(BaseSettings):
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
     
-    # AWS Settings
-    AWS_ACCESS_KEY_ID: str = "your-access-key"
-    AWS_SECRET_ACCESS_KEY: str = "your-secret-key"
-    AWS_REGION: str = "us-east-1"
-    AWS_S3_BUCKET: str = "your-bucket"
-    AWS_ENDPOINT: str = "https://s3.amazonaws.com"
-    AWS_PUBLIC_URL: str = "https://your-bucket.s3.amazonaws.com"
-    
     # S3 Presigned URL Settings
     S3_PRESIGNED_URL_EXPIRY: int = 3600  # 1 hour in seconds
     S3_PRESIGNED_URL_CACHE_TTL: int = 1800  # 30 minutes in seconds
@@ -40,16 +32,12 @@ class Settings(BaseSettings):
     AWS_REGION: Optional[str] = None
     AWS_S3_BUCKET: Optional[str] = None
     AWS_ENDPOINT: Optional[str] = None  # Changed from AWS_S3_ENDPOINT to AWS_ENDPOINT
-    AWS_PUBLIC_URL: Optional[str] = None
     
     # RabbitMQ settings
     RABBITMQ_URL: str
     VOICE_PROCESSING_QUEUE: str = "voice_processing"
     TEXT_PARSER_QUEUE: str = "text_parser"
     VOICE_GENERATION_QUEUE: str = "audio_generation"
-
-    # Checkpoints settings
-    CHECKPOINTS_URL: str = "https://pub-ac88a2c53a93464980d73555cf36e296.r2.dev/voice_processing/checkpoints_v2_0417.zip"
 
     # Groq settings
     GROQ_API_KEY: str
