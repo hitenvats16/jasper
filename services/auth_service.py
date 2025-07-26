@@ -17,11 +17,7 @@ from models.voice import Voice
 from models.project import Project
 from models.credit import UserCredit
 from models.payment import Payment, PaymentRefund
-from models.voice_job import VoiceProcessingJob
 from models.book_processing_job import BookProcessingJob
-from models.book_voice_processing_job import BookVoiceProcessingJob
-from models.processed_voice_chunks import ProcessedVoiceChunks
-from models.voice_embedding import VoiceEmbedding
 import random, string
 import httpx
 from datetime import datetime, timezone, timedelta
@@ -60,33 +56,20 @@ async def hard_delete_user(db: Session, user_id: int) -> None:
             if book.s3_key:
                 await delete_s3_objects_with_prefix(book.s3_key)
         
-        # Delete processed voice chunks
-        for chunk in user.processed_voice_chunks:
-            if chunk.s3_key:
-                await delete_s3_objects_with_prefix(chunk.s3_key)
-        
         # Explicitly delete all related data in order to handle any potential foreign key constraints
         
         # Delete OAuth accounts
         db.query(OAuthAccount).filter(OAuthAccount.user_id == user_id).delete()
         
         # Delete voice-related data
-        db.query(VoiceEmbedding).filter(VoiceEmbedding.voice_id.in_(
-            db.query(Voice.id).filter(Voice.user_id == user_id)
-        )).delete(synchronize_session=False)
         db.query(Voice).filter(Voice.user_id == user_id).delete()
         
         # Delete book-related data
         db.query(BookProcessingJob).filter(BookProcessingJob.user_id == user_id).delete()
-        db.query(BookVoiceProcessingJob).filter(BookVoiceProcessingJob.user_id == user_id).delete()
         db.query(Book).filter(Book.user_id == user_id).delete()
         
         # Delete project data
         db.query(Project).filter(Project.user_id == user_id).delete()
-        
-        # Delete voice processing data
-        db.query(VoiceProcessingJob).filter(VoiceProcessingJob.user_id == user_id).delete()
-        db.query(ProcessedVoiceChunks).filter(ProcessedVoiceChunks.user_id == user_id).delete()
         
         # Delete payment and credit data
         db.query(PaymentRefund).filter(PaymentRefund.user_id == user_id).delete()

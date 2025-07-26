@@ -31,3 +31,6 @@ class Project(Base):
     
     # Relationship with Books (optional - through association table)
     books = relationship("Book", secondary="book_project_association", back_populates="projects", lazy="select")
+    
+    # Relationship with Audio Generation Jobs
+    audio_generation_jobs = relationship("AudioGenerationJob", back_populates="project", lazy="select")

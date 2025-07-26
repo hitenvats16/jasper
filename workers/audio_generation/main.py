@@ -3,15 +3,10 @@ from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError, OperationalError
 from db.session import SessionLocal
 from models import (
-    BookVoiceProcessingJob,
-    ProcessedVoiceChunks,
-    JobStatus,
-    Voice,
-    Book,
-    BookVoiceProcessingJob,
     User,
-    ProcessedVoiceChunksType,
-    Config,
+    Book,
+    BookProcessingJob,
+    JobStatus,
 )
 from core.config import settings
 import logging
@@ -52,7 +47,7 @@ class AudioGenerator(BaseWorker):
     def generate_audio_for_chapter(
         self,
         chapter_data: dict,
-        job: BookVoiceProcessingJob,
+        job: BookProcessingJob,
         user: User,
         book: Book,
         voice: Voice = None,
@@ -185,8 +180,8 @@ class AudioGenerator(BaseWorker):
                 raise RuntimeError(f"Database connection failed: {str(e)}")
         
             job = (
-                db.query(BookVoiceProcessingJob)
-                .filter(BookVoiceProcessingJob.id == int(job_id))
+                db.query(BookProcessingJob)
+                .filter(BookProcessingJob.id == int(job_id))
                 .first()
             )
 
@@ -296,25 +291,6 @@ class AudioGenerator(BaseWorker):
                             db=db,
                         )
 
-                        # Create processed chunk record
-                        self.create_processed_chunk(
-                            job_id=job_id,
-                            user_id=user_id,
-                            book_id=book_id,
-                            chapter_id=chapter.get("chapter_id"),
-                            s3_key=result["s3_key"],
-                            index=index,
-                            data={
-                                "chapter_title": result["chapter_title"],
-                                "meta_data": result["meta_data"],
-                                "duration": result["duration"],
-                                "format": result["format"],
-                                "processing_time": datetime.utcnow().isoformat(),
-                            },
-                            type=ProcessedVoiceChunksType.CHAPTER_AUDIO,
-                            db=db,
-                        )
-
                         processed_chapters += 1
                         logger.info(
                             f"Successfully processed chapter {chapter.get('chapter_id')}"
@@ -373,29 +349,6 @@ class AudioGenerator(BaseWorker):
                     # Don't fail the entire job if credit deduction fails
                     # The job completed successfully, credit issue can be handled separately
 
-            except SQLAlchemyError as e:
-                logger.error(f"Database error processing voice generation job {job_id}: {str(e)}")
-                # Update job status to failed with specific error
-                try:
-                    self.update_job_status(
-                        job_id,
-                        "FAILED",
-                        {
-                            "error": f"Database error: {str(e)}",
-                            "error_type": "database_error",
-                            "processed_chapters": (
-                                processed_chapters if "processed_chapters" in locals() else 0
-                            ),
-                            "failed_chapters": (
-                                failed_chapters if "failed_chapters" in locals() else 0
-                            ),
-                        },
-                        db=db,
-                    )
-                except:
-                    logger.error("Failed to update job status after database error")
-                raise
-
             except Exception as e:
                 logger.error(f"Error processing voice generation job {job_id}: {str(e)}")
                 logger.error(f"Full traceback: {traceback.format_exc()}")
@@ -423,10 +376,12 @@ class AudioGenerator(BaseWorker):
         except OperationalError as e:
             logger.error(f"Database connection error: {str(e)}")
             raise RuntimeError(f"Database connection failed: {str(e)}")
+        
         except Exception as e:
             logger.error(f"Unexpected error in process method: {str(e)}")
             logger.error(f"Full traceback: {traceback.format_exc()}")
             raise
+
         finally:
             # Always close the database session
             if db:
@@ -440,14 +395,10 @@ class AudioGenerator(BaseWorker):
         self, job_id: int, status: str, result: dict = None, db: Session = None
     ):
         """Update job status via API"""
-        if db is None:
-            logger.error("Database session is required for update_job_status")
-            raise ValueError("Database session is required")
-            
         try:
             job = (
-                db.query(BookVoiceProcessingJob)
-                .filter(BookVoiceProcessingJob.id == job_id)
+                db.query(BookProcessingJob)
+                .filter(BookProcessingJob.id == job_id)
                 .first()
             )
             if job:
@@ -460,42 +411,6 @@ class AudioGenerator(BaseWorker):
                 logger.warning(f"Job {job_id} not found")
         except Exception as e:
             logger.error(f"Failed to update job status: {str(e)}")
-            raise
-
-    def create_processed_chunk(
-        self,
-        job_id: int,
-        user_id: int,
-        book_id: int,
-        chapter_id: str,
-        s3_key: str,
-        index: int,
-        type: ProcessedVoiceChunksType,
-        data: dict = {},
-        db: Session = None,
-    ):
-        """Create processed chunk record via API"""
-        if db is None:
-            logger.error("Database session is required for create_processed_chunk")
-            raise ValueError("Database session is required")
-            
-        try:
-            processed_chunk = ProcessedVoiceChunks(
-                voice_processing_job_id=job_id,
-                user_id=user_id,
-                book_id=book_id,
-                chapter_id=chapter_id,
-                s3_key=s3_key,
-                index=index,
-                data=data,
-                type=type,
-            )
-            db.add(processed_chunk)
-            db.commit()
-            logger.info(f"Created processed chunk for chapter {chapter_id}")
-            return processed_chunk
-        except Exception as e:
-            logger.error(f"Failed to create processed chunk: {str(e)}")
             raise
 
 

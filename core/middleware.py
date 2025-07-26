@@ -1,12 +1,40 @@
-from fastapi import Request, HTTPException, status
+from fastapi import Request, HTTPException, status, Response
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from core.security import decode_access_token
 from models.user import User
 from db.session import SessionLocal
-from typing import Optional
+from typing import Optional, Callable
 from functools import wraps
+import time
+import logging
 
+logger = logging.getLogger(__name__)
 security = HTTPBearer()
+
+async def timing_middleware(request: Request, call_next: Callable) -> Response:
+    """
+    Middleware to log request timing information.
+    
+    Args:
+        request: FastAPI request object
+        call_next: Next middleware/endpoint in the chain
+        
+    Returns:
+        Response: FastAPI response object
+    """
+    start_time = time.time()
+    logger.info(f"Request started: {request.method} {request.url}")
+    
+    try:
+        response = await call_next(request)
+        process_time = time.time() - start_time
+        logger.info(f"Request completed in {process_time:.2f}s: {request.method} {request.url}")
+        response.headers["X-Process-Time"] = str(process_time)
+        return response
+    except Exception as e:
+        process_time = time.time() - start_time
+        logger.error(f"Request failed after {process_time:.2f}s: {request.method} {request.url} - Error: {str(e)}")
+        raise
 
 def get_current_user_from_request(request: Request) -> Optional[User]:
     """Get the current user from the request for middleware purposes"""

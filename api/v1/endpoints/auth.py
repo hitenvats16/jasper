@@ -6,7 +6,7 @@ from schemas.user import UserRead, UserUpdate
 from services.auth_service import register_user, verify_email, authenticate_user, get_or_create_user_by_google_oauth, delete_user, hard_delete_user
 from core.security import create_access_token, decode_access_token
 from core.config import settings
-from typing import Any
+from typing import Any, Optional
 from urllib.parse import urlencode
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from models.user import User
@@ -25,130 +25,6 @@ router = APIRouter(
 )
 
 security = HTTPBearer()
-
-@router.post(
-    "/register",
-    response_model=UserRead,
-    status_code=status.HTTP_201_CREATED,
-    summary="Register a new user",
-    description="""
-    Register a new user with email and password authentication.
-    
-    - Sends a verification code to the provided email address
-    - Email must be unique and not already registered
-    - Password must meet security requirements
-    - Returns the created user object (without sensitive data)
-    
-    **Note:** Email verification is required before login
-    """,
-    responses={
-        201: {"description": "User successfully registered"},
-        400: {"description": "Invalid input data or email already registered"}
-    },
-    tags=["Authentication"]
-)
-def register(request: RegisterRequest, db: Session = Depends(get_db)):
-    """
-    Register a new user with email and password.
-    
-    Args:
-        request: Registration data including email and password
-        db: Database session
-    
-    Returns:
-        UserRead: Created user object
-        
-    Raises:
-        HTTPException: If email is already registered or input is invalid
-    """
-    try:
-        user = register_user(db, request)
-        return user
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@router.post(
-    "/verify-email",
-    response_model=UserRead,
-    status_code=status.HTTP_200_OK,
-    summary="Verify user email",
-    description="""
-    Verify a user's email address using the verification code.
-    
-    - Code is sent to user's email during registration
-    - Code expires after a certain time period
-    - User must be verified before they can log in
-    
-    **Note:** This endpoint is required to complete the registration process
-    """,
-    responses={
-        200: {"description": "Email successfully verified"},
-        400: {"description": "Invalid or expired verification code"}
-    },
-    tags=["Authentication"]
-)
-def verify(request: EmailVerificationRequest, db: Session = Depends(get_db)):
-    """
-    Verify a user's email address using the verification code.
-    
-    Args:
-        request: Verification data including email and code
-        db: Database session
-    
-    Returns:
-        UserRead: Updated user object with verified status
-        
-    Raises:
-        HTTPException: If code is invalid or expired
-    """
-    try:
-        user = verify_email(db, request.email, request.code)
-        return user
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-
-@router.post(
-    "/login",
-    response_model=Token,
-    status_code=status.HTTP_200_OK,
-    summary="Login with email and password",
-    description="""
-    Authenticate a user and generate a JWT access token.
-    
-    - Requires valid email and password
-    - Email must be verified
-    - Returns JWT token with expiration time
-    - Token must be included in Authorization header for protected endpoints
-    
-    **Note:** Token expires after a configurable time period
-    """,
-    responses={
-        200: {"description": "Successfully authenticated"},
-        401: {"description": "Invalid credentials or email not verified"}
-    },
-    tags=["Authentication"]
-)
-def login(request: LoginRequest, db: Session = Depends(get_db)):
-    """
-    Authenticate a user and generate a JWT access token.
-    
-    Args:
-        request: Login credentials (email and password)
-        db: Database session
-    
-    Returns:
-        Token: JWT access token with expiration time
-        
-    Raises:
-        HTTPException: If credentials are invalid or email not verified
-    """
-    user = authenticate_user(db, request.email, request.password)
-    if not user or not user.is_verified:
-        raise HTTPException(status_code=401, detail="Invalid credentials or email not verified")
-    expires_delta = timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
-    access_token = create_access_token({"user_id": user.id, "email": user.email}, expires_delta=expires_delta)
-    expires_at = datetime.now(timezone.utc) + expires_delta
-    return {"access_token": access_token, "token_type": "bearer", "expires_at": expires_at}
 
 @router.get(
     "/login/google",
@@ -169,7 +45,9 @@ def login(request: LoginRequest, db: Session = Depends(get_db)):
     },
     tags=["Authentication"]
 )
-def login_google():
+def login_google(
+    redirect_url: Optional[str] = None,
+):  
     """
     Redirect to Google's OAuth 2.0 consent screen.
     
@@ -179,10 +57,11 @@ def login_google():
     Raises:
         HTTPException: If redirect_url is invalid
     """
-    
-    # Always use the configured Google redirect URI for OAuth callback
-    # The custom redirect_url is only for final user redirect after authentication
-    oauth_redirect_uri = settings.GOOGLE_REDIRECT_URI
+    if redirect_url:
+        oauth_redirect_uri = redirect_url
+    else:
+        oauth_redirect_uri = settings.GOOGLE_REDIRECT_URI
+    print(f"Redirect URL: {redirect_url}")
     print(f"OAuth redirect URI: {oauth_redirect_uri}")
     params = {
         "client_id": settings.GOOGLE_CLIENT_ID,
@@ -191,6 +70,7 @@ def login_google():
         "scope": "openid email profile",
         "access_type": "offline",
         "prompt": "consent",
+        "state": oauth_redirect_uri.encode("utf-8").hex() if oauth_redirect_uri else "",
     }
     
     url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
@@ -238,13 +118,14 @@ def google_callback(request: Request, db: Session = Depends(get_db)):
         HTTPException: If OAuth code is invalid or missing
     """
     code = request.query_params.get("code")
+    state = request.query_params.get("state")
+    if state:
+        oauth_redirect_uri = bytes.fromhex(state).decode("utf-8")
+    else:
+        oauth_redirect_uri = settings.GOOGLE_REDIRECT_URI
     
     if not code:
         raise HTTPException(status_code=400, detail="Missing code in callback")
-    
-    # Always use the configured Google redirect URI for OAuth token exchange
-    # This must match what was used in the authorization request
-    oauth_redirect_uri = settings.GOOGLE_REDIRECT_URI
     
     # Use the OAuth redirect URI for token exchange
     user = get_or_create_user_by_google_oauth(db, code, oauth_redirect_uri)

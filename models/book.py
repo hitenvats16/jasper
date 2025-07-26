@@ -14,6 +14,7 @@ from sqlalchemy.orm import relationship
 from db.session import Base
 from core.config import settings
 from utils.text import count_tokens
+from utils.s3 import get_presigned_url
 
 # Association table for linking books to projects (optional relationship)
 book_project_association = Table(
@@ -43,15 +44,11 @@ class Book(Base):
     projects = relationship("Project", secondary=book_project_association, back_populates="books", lazy="select")
     # Processing jobs for this book
     processing_jobs = relationship("BookProcessingJob", back_populates="book", lazy="select")
-    # Voice processing jobs for this book
-    voice_processing_jobs = relationship("BookVoiceProcessingJob", back_populates="book", lazy="select")
-    # Processed voice chunks for this book
-    processed_voice_chunks = relationship("ProcessedVoiceChunks", back_populates="book", lazy="select") 
 
     @property
     def s3_public_link(self):
         """Returns the public AWS S3 URL for this voice file."""
-        return f"{settings.AWS_PUBLIC_URL}/{self.s3_key}"
+        return get_presigned_url(self.s3_key)
     
     @property
     def estimated_tokens(self):

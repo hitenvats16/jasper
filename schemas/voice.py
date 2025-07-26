@@ -2,7 +2,6 @@ from pydantic import BaseModel, HttpUrl, Field
 from typing import Dict, Any, Optional, List
 from datetime import datetime
 from enum import Enum
-from schemas.voice_job import VoiceProcessingJobRead
 
 class VoiceSortField(str, Enum):
     NAME = "name"
@@ -35,7 +34,6 @@ class VoiceRead(VoiceBase):
     user_id: int
     created_at: datetime
     updated_at: Optional[datetime] = None
-    processing_jobs: Optional[List[VoiceProcessingJobRead]] = None
 
     class Config:
         from_attributes = True
@@ -44,8 +42,6 @@ class VoiceFilters(BaseModel):
     """Query parameters for filtering voices"""
     search: Optional[str] = Field(None, description="Search term for name or description")
     is_default: Optional[bool] = Field(None, description="Filter default/custom voices")
-    has_processing_job: Optional[bool] = Field(None, description="Filter voices with processing jobs")
-    processing_status: Optional[str] = Field(None, description="Filter by latest processing job status")
     sort_by: Optional[VoiceSortField] = Field(VoiceSortField.CREATED_AT, description="Field to sort by")
     sort_order: Optional[SortOrder] = Field(SortOrder.DESC, description="Sort order (asc/desc)")
     page: Optional[int] = Field(1, ge=1, description="Page number")

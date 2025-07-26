@@ -2,7 +2,6 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_, func, desc, asc
 from models.voice import Voice
 from models.default_voice import DefaultVoice
-from models.voice_job import VoiceProcessingJob, JobStatus
 from utils.message_publisher import message_publisher
 from core.config import settings
 from typing import List, Optional
@@ -56,47 +55,6 @@ class VoiceService:
                     is_default=True
                 )
                 db.add(voice)
-                db.flush()  # Flush to get the voice ID
-                
-                # Create processing job for the voice
-                job = VoiceProcessingJob(
-                    s3_key=default_voice.s3_key,
-                    status=JobStatus.QUEUED,
-                    user_id=user_id,
-                    voice_id=voice.id,
-                    meta_data={
-                        "name": default_voice.name,
-                        "description": default_voice.description,
-                        "source": "default_voice",
-                        "default_voice_id": default_voice.id,
-                        "is_seeded": True
-                    }
-                )
-                db.add(job)
-                db.flush()  # Flush to get the job ID
-                
-                # Publish message to voice processing queue
-                message = {
-                    "job_id": job.id,
-                    "s3_key": default_voice.s3_key,
-                    "user_id": user_id,
-                    "voice_id": voice.id,
-                    "metadata": {
-                        "name": default_voice.name,
-                        "description": default_voice.description,
-                        "source": "default_voice",
-                        "default_voice_id": default_voice.id,
-                        "is_seeded": True
-                    }
-                }
-                
-                try:
-                    message_publisher.publish(settings.VOICE_PROCESSING_QUEUE, message)
-                    logger.info(f"Published voice processing job {job.id} for seeded voice {voice.id}")
-                except Exception as e:
-                    logger.error(f"Failed to publish voice processing job {job.id}: {str(e)}")
-                    # Continue with other voices even if one fails
-                
                 created_voices.append(voice)
             
             db.commit()
@@ -145,25 +103,6 @@ class VoiceService:
         if filters.is_default is not None:
             query = query.filter(Voice.is_default == filters.is_default)
         
-        # Filter by processing job existence
-        if filters.has_processing_job is not None:
-            subquery = db.query(VoiceProcessingJob.voice_id).filter(
-                VoiceProcessingJob.is_deleted == False
-            ).distinct().subquery()
-            
-            if filters.has_processing_job:
-                query = query.filter(Voice.id.in_(subquery))
-            else:
-                query = query.filter(Voice.id.notin_(subquery))
-        
-        # Filter by processing status
-        if filters.processing_status:
-            subquery = db.query(VoiceProcessingJob.voice_id).filter(
-                VoiceProcessingJob.status == filters.processing_status,
-                VoiceProcessingJob.is_deleted == False
-            ).distinct().subquery()
-            query = query.filter(Voice.id.in_(subquery))
-        
         # Get total count before pagination
         total_count = query.count()
         
@@ -209,53 +148,4 @@ class VoiceService:
             Voice.id == voice_id,
             Voice.user_id == user_id,
             Voice.is_deleted == False
-        ).first()
-    
-    @staticmethod
-    def create_voice_processing_job(
-        db: Session,
-        s3_key: str,
-        user_id: int,
-        voice_id: int,
-        metadata: dict
-    ) -> VoiceProcessingJob:
-        """
-        Create a voice processing job and publish it to the queue.
-        
-        Args:
-            db: Database session
-            s3_key: S3 key of the voice file
-            user_id: ID of the user
-            voice_id: ID of the voice
-            metadata: Additional metadata for the job
-            
-        Returns:
-            VoiceProcessingJob: Created job object
-        """
-        job = VoiceProcessingJob(
-            s3_key=s3_key,
-            status=JobStatus.QUEUED,
-            user_id=user_id,
-            voice_id=voice_id,
-            meta_data=metadata
-        )
-        db.add(job)
-        db.flush()  # Flush to get the job ID
-        
-        # Publish message to queue
-        message = {
-            "job_id": job.id,
-            "s3_key": s3_key,
-            "user_id": user_id,
-            "voice_id": voice_id,
-            "metadata": metadata
-        }
-        
-        try:
-            message_publisher.publish(settings.VOICE_PROCESSING_QUEUE, message)
-            logger.info(f"Published voice processing job {job.id} for voice {voice_id}")
-        except Exception as e:
-            logger.error(f"Failed to publish voice processing job {job.id}: {str(e)}")
-            raise
-        
-        return job 
+        ).first() 

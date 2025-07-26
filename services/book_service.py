@@ -4,7 +4,7 @@ from models.book import Book
 from models.project import Project
 from models.user import User
 from models.book_processing_job import BookProcessingJob
-from models.voice_job import JobStatus
+from models.job_status import JobStatus
 from schemas.book import BookCreate, BookUpdate, BookFilters, BookListResponse, BookSortField, SortOrder
 from typing import Optional, List, Dict, Any, Tuple
 from fastapi import HTTPException, status

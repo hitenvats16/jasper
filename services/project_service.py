@@ -6,18 +6,22 @@ from schemas.project import ProjectCreate, ProjectUpdate
 from services.book_service import BookService
 from typing import List, Optional
 from fastapi import HTTPException, status
+from datetime import datetime, timezone
 
 class ProjectService:
     project_model = Project  # Add this line to expose the Project model
 
     @staticmethod
     def create_project(db: Session, user_id: int, project_data: ProjectCreate) -> Project:
+        now = datetime.now(timezone.utc)
         project = Project(
             title=project_data.title,
             description=project_data.description,
             tags=project_data.tags,
             data=project_data.data,
-            user_id=user_id
+            user_id=user_id,
+            created_at=now,
+            updated_at=now
         )
         db.add(project)
         db.commit()
@@ -69,6 +73,9 @@ class ProjectService:
         for field, value in update_data.items():
             setattr(project, field, value)
         
+        # Update the updated_at timestamp
+        project.updated_at = datetime.now(timezone.utc)
+        
         db.add(project)
         db.commit()
         db.refresh(project)
@@ -99,6 +106,7 @@ class ProjectService:
         
         # Soft delete - mark as deleted instead of removing from database
         project.is_deleted = True
+        project.updated_at = datetime.now(timezone.utc)
         db.add(project)
         db.commit()
         return True

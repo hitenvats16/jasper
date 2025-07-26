@@ -10,17 +10,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
-from api.v1.endpoints import credit_router, project_router, book_router, voice_generation_router, payment, persistent_data_router
+from api.v1.endpoints import credit_router, project_router, book_router, payment, persistent_data_router
 from core.dependencies import get_optional_user
 from models.user import User
 import logging
 import sys
 from utils.message_publisher import get_rabbitmq_connection
 from api.v1.endpoints import config_router
-from core.config import settings
-from datetime import datetime
-import asyncio
-from contextlib import asynccontextmanager
 import time
 
 # Configure logging
@@ -263,25 +259,6 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-@app.get("/health/fast")
-def health_fast():
-    """
-    Ultra-fast health check endpoint with no dependencies, rate limiting, or async overhead.
-    Use this to test if the basic FastAPI app is responsive.
-    """
-    return {"status": "ok", "timestamp": datetime.utcnow().isoformat()}
-
-@app.get("/health/simple")
-async def health_simple():
-    """
-    Simple health check endpoint without any dependencies for quick response.
-    """
-    return {
-        "status": "ok",
-        "timestamp": datetime.utcnow().isoformat(),
-        "version": app.version
-    }
-
 @app.get("/health")
 @limiter.limit("200/minute")
 async def health(
@@ -358,13 +335,6 @@ app.include_router(
 )
 
 app.include_router(
-    voice_generation_router,
-    prefix="/api/v1/voice-generation",
-    tags=["Voice Generation"],
-    dependencies=[Depends(get_rate_limit)]
-)
-
-app.include_router(
     config_router,
     prefix="/api/v1/config",
     tags=["Config"],
@@ -393,5 +363,6 @@ if __name__ == "__main__":
     uvicorn.run(
         "main:app", 
         host="0.0.0.0", 
-        port=port
-    )
+        port=port,
+        reload=True
+)

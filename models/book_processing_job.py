@@ -1,7 +1,7 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, JSON, Enum, func, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
 from db.session import Base
-from models.voice_job import JobStatus
+from models.job_status import JobStatus
 from datetime import datetime
 
 class BookProcessingJob(Base):

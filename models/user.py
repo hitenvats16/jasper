@@ -24,10 +24,7 @@ class User(Base):
     oauth_accounts = relationship("OAuthAccount", back_populates="user", cascade="all, delete-orphan", lazy="select")
     voices = relationship("Voice", back_populates="user", cascade="all, delete-orphan", lazy="select")
     credit = relationship("UserCredit", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="select")
-    voice_jobs = relationship("VoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="select")
     book_processing_jobs = relationship("BookProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="select")
-    book_voice_processing_jobs = relationship("BookVoiceProcessingJob", back_populates="user", cascade="all, delete-orphan", lazy="select")
-    processed_voice_chunks = relationship("ProcessedVoiceChunks", back_populates="user", cascade="all, delete-orphan", lazy="select")
     projects = relationship("Project", back_populates="user", cascade="all, delete-orphan", lazy="select")
     books = relationship("Book", back_populates="user", cascade="all, delete-orphan", lazy="select")
     config = relationship("Config", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="select")
@@ -38,6 +35,8 @@ class User(Base):
     rate = relationship("Rate", back_populates="user", uselist=False, cascade="all, delete-orphan", lazy="select")
     # Persistent data relationship
     persistent_data = relationship("PersistentData", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    # Audio generation jobs relationship
+    audio_generation_jobs = relationship("AudioGenerationJob", back_populates="user", cascade="all, delete-orphan", lazy="select")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_account"

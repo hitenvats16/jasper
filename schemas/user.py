@@ -11,7 +11,6 @@ class OAuthAccountRead(BaseModel):
 class RateRead(BaseModel):
     id: int
     values: float = Field(..., description="Per token rate for the user")
-    is_deleted: bool = False
 
     class Config:
         from_attributes = True
@@ -20,7 +19,6 @@ class UserBase(BaseModel):
     email: EmailStr
     is_active: bool = True
     is_verified: bool = False
-    is_deleted: bool = False
 
 class UserCreate(UserBase):
     password: str
@@ -46,7 +44,6 @@ class UserRead(UserBase):
             "email": obj.email,
             "is_active": obj.is_active,
             "is_verified": obj.is_verified,
-            "is_deleted": obj.is_deleted,
             "created_at": obj.created_at,
             "updated_at": obj.updated_at,
             "oauth_accounts": obj.oauth_accounts,

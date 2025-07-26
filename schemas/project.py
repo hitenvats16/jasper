@@ -80,8 +80,8 @@ class ProjectResponse(BaseModel):
     data: Optional[dict] = None
     user_id: int
     books: List[BookInProject] = []
-    created_at: str
-    updated_at: Optional[str] = None
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
     book_count: int = 0
 
     class Config:
@@ -89,6 +89,8 @@ class ProjectResponse(BaseModel):
     
     @classmethod
     def from_project(cls, project):
+        if not project:
+            return None
         return cls(
             id=project.id,
             title=project.title,
@@ -97,8 +99,8 @@ class ProjectResponse(BaseModel):
             data=project.data or None,
             user_id=project.user_id,
             books=[BookInProject.from_orm(book) for book in project.books],
-            created_at=project.created_at.isoformat() if project.created_at else None,
-            updated_at=project.updated_at.isoformat() if project.updated_at else None,
+            created_at=project.created_at,
+            updated_at=project.updated_at,
             book_count=len(project.books) if project.books else 0
         )
 

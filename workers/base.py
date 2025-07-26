@@ -5,7 +5,6 @@ import json
 import logging
 from core.config import settings
 from datetime import datetime
-from models import User, VoiceProcessingJob, Voice  # Import models to ensure they're initialized
 
 logger = logging.getLogger(__name__)
 
