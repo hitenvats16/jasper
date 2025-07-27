@@ -27,10 +27,6 @@ class BookProcessingService:
                 logger.error("Book object is None or empty")
                 raise ValueError("Book object is required")
             
-            if isinstance(book, int):
-                logger.error(f"Expected Book object, got integer: {book}")
-                raise TypeError(f"Expected Book object, got integer: {book}")
-            
             if not hasattr(book, 'id'):
                 logger.error(f"Book object missing 'id' attribute. Type: {type(book)}")
                 raise AttributeError(f"Book object missing 'id' attribute. Type: {type(book)}")
@@ -49,7 +45,8 @@ class BookProcessingService:
             )
             
             db.add(processing_job)
-            db.flush()  # Get the job ID
+            db.flush()
+            db.commit()
             
             logger.info(f"Created BookProcessingJob {processing_job.id} for book {book.id}")
             return processing_job
@@ -77,7 +74,6 @@ class BookProcessingService:
             message = {
                 "job_id": job.id,
                 "book_id": book.id,
-                "created_at": datetime.utcnow().isoformat()
             }
             
             temp_worker.publish_message(message)
@@ -95,15 +91,14 @@ class BookProcessingService:
             # Create the job
             job = self.create_processing_job(db, book)
             
-            # Publish to queue
-            if self.publish_job_to_queue(job, book):
-                db.commit()
-                return job
-            else:
-                # If queue publishing fails, still commit the job but log the issue
-                db.commit()
-                logger.warning(f"Job {job.id} created but queue publishing failed")
-                return job
+            # Commit the job to database FIRST
+            db.commit()
+            logger.info(f"Committed job {job.id} to database")
+            
+            # Publish the job to the queue
+            self.publish_job_to_queue(job, book)
+
+            return job
                 
         except Exception as e:
             logger.error(f"Failed to create and publish job for book {book.id}: {str(e)}")

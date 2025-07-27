@@ -8,10 +8,6 @@ from urllib.parse import quote_plus
 logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
-    PROJECT_NAME: str = "Jasper API"
-    VERSION: str = "1.0.0"
-    API_V1_STR: str = "/api/v1"
-    
     # S3 Presigned URL Settings
     S3_PRESIGNED_URL_EXPIRY: int = 3600  # 1 hour in seconds
     S3_PRESIGNED_URL_CACHE_TTL: int = 1800  # 30 minutes in seconds
@@ -36,7 +32,7 @@ class Settings(BaseSettings):
     # RabbitMQ settings
     RABBITMQ_URL: str
     VOICE_PROCESSING_QUEUE: str = "voice_processing"
-    TEXT_PARSER_QUEUE: str = "text_parser"
+    TEXT_PARSER_QUEUE: str = "book_parser"
     VOICE_GENERATION_QUEUE: str = "audio_generation"
 
     # Groq settings

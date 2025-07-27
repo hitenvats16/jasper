@@ -54,6 +54,8 @@ class TextParserAndExtractor(BaseWorker):
         book_id = job_data.get("book_id")
         
         logger.info(f"Processing book processing job {job_id} for book {book_id}")
+        logger.info(f"Job data received: {job_data}")
+        
         db = SessionLocal()
         job = None
         book = None
@@ -61,6 +63,8 @@ class TextParserAndExtractor(BaseWorker):
         try:
             # Get the job and book from database
             job = db.query(BookProcessingJob).filter_by(id=job_id, is_deleted=False).first()
+            logger.info(f"Job query result: {job}")
+            
             if not job:
                 logger.error(f"BookProcessingJob {job_id} not found")
                 return
