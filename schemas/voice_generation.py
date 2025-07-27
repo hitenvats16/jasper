@@ -163,6 +163,7 @@ class AudioGenerationJobRead(BaseModel):
     status: JobStatus
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ended_at: Optional[datetime] = None
+    s3_url: Optional[HttpUrl] = None
 
     class Config:
         from_attributes = True
@@ -181,6 +182,7 @@ class AudioGenerationJobFilters(BaseModel):
     sort_order: Optional[SortOrder] = Field(SortOrder.DESC, description="Sort order (asc/desc)")
     page: Optional[int] = Field(1, ge=1, description="Page number")
     page_size: Optional[int] = Field(10, ge=1, le=100, description="Items per page")
+    s3_url: Optional[HttpUrl] = Field(None, description="Filter by S3 URL")
 
 class AudioGenerationJobListResponse(BaseModel):
     """Response model for paginated audio generation job list"""

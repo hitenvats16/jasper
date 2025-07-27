@@ -33,3 +33,4 @@ spacy
 numpy<2
 tiktoken
 psutil
+resend

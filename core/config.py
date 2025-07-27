@@ -50,6 +50,11 @@ class Settings(BaseSettings):
     
     # Credit settings
     DEFAULT_USER_CREDITS: float = 1000.0
+    
+    # Email settings
+    RESEND_API_KEY: Optional[str] = None
+    EMAILS_FROM_EMAIL: str = "noreply@zovoice.com"
+    FRONTEND_URL: str = "https://zovoice.com"
 
     class Config:
         env_file = ".env"
