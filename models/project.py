@@ -34,3 +34,5 @@ class Project(Base):
 
     # Relationship with Audio Generation Jobs
     audio_generation_jobs = relationship("AudioGenerationJob", back_populates="project", lazy="select")
+    # Relationship with Audiobook Generations
+    audiobook_generations = relationship("AudiobookGeneration", back_populates="project", lazy="select")

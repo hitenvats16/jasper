@@ -6,6 +6,7 @@ from core.config import settings
 from db.session import SessionLocal
 from models.voice import Voice
 from utils.s3 import get_presigned_url
+from schemas.audio_config import VoiceEmotion
 
 class JobStatus(str, Enum):
     QUEUED = "QUEUED"
@@ -157,13 +158,6 @@ class BookListResponse(BaseModel):
     class Config:
         from_attributes = True
 
-
-class EmotionType(str, Enum):
-    HAPPY = "happy"
-    SAD = "sad"
-    NEUTRAL = "neutral"
-    DEFAULT = "default"
-
 class CommandType(str, Enum):
     SPEAKER_CHANGE = "speaker_change"
     EMOTION_CHANGE = "emotion_change"
@@ -184,7 +178,7 @@ class ChapterCommand(BaseModel):
     command_type: CommandType
     content_position: ContentPosition
     voice_id: Optional[int] = Field(None, description="Required if command_type is speaker_change")
-    emotion: Optional[EmotionType] = Field(None, description="Required if command_type is emotion_change")
+    emotion: Optional[VoiceEmotion] = Field(None, description="Required if command_type is emotion_change")
 
     @field_validator('voice_id')
     @classmethod
@@ -211,10 +205,10 @@ class ChapterCommand(BaseModel):
 
     @field_validator('emotion')
     @classmethod
-    def emotion_required_for_emotion_change(cls, v: Optional[EmotionType], info) -> Optional[EmotionType]:
+    def emotion_required_for_emotion_change(cls, v: Optional[VoiceEmotion], info) -> Optional[VoiceEmotion]:
         if info.data.get('command_type') == CommandType.EMOTION_CHANGE and v is None:
             raise ValueError('emotion is required for emotion_change command')
-        emotions = [emotion.value for emotion in EmotionType]
+        emotions = [emotion.value for emotion in VoiceEmotion]
         if v not in emotions:
             raise ValueError(f'Invalid emotion: {v}. Must be one of {emotions}')
         return v

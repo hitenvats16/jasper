@@ -6,7 +6,7 @@ from models.user import User
 from models.project import Project
 from models.audio_generation_job import AudioGenerationJob
 from models.job_status import JobStatus
-from schemas.voice_generation import (
+from schemas.audio_generation import (
     AudioGenerationResponse,
     AudioGenerationRequest,
     AudioGenerationJobRead,
@@ -153,7 +153,9 @@ async def generate_audiobook(
             voice_id=voice_id,
             input_data_s3_key=s3_key,
             status=JobStatus.QUEUED,
-            job_metadata=request.model_dump(exclude={'book_data'}),
+            job_metadata={
+                "voice_gen_params": request.model_dump(exclude={'book_data'})
+            },
             created_at=datetime.now(timezone.utc)
         )
         

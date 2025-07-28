@@ -140,32 +140,6 @@ def create_book_processing_job(book_id):
         logger.error(f"Full traceback: {traceback.format_exc()}")
         # Don't fail the book creation if job creation fails
 
-def publish_voice_job(job_id: int):
-    """Publish a voice processing job to RabbitMQ queue"""
-    try:
-        connection = get_rabbitmq_connection()
-        channel = connection.channel()
-        
-        # Ensure queue exists
-        channel.queue_declare(queue=settings.VOICE_PROCESSING_QUEUE, durable=True)
-        
-        # Publish message
-        channel.basic_publish(
-            exchange='',
-            routing_key=settings.VOICE_PROCESSING_QUEUE,
-            body=json.dumps({"job_id": job_id}),
-            properties=pika.BasicProperties(
-                delivery_mode=2,  # make message persistent
-            )
-        )
-        logger.info(f"Published voice job {job_id} to queue")
-        
-        # Close connection
-        connection.close()
-    except Exception as e:
-        logger.error(f"Failed to publish voice job {job_id}: {str(e)}")
-        raise
-
 def publish_message(queue_name: str, message: str):
     """Publish a message to the specified queue"""
     try:
@@ -190,4 +164,6 @@ def publish_message(queue_name: str, message: str):
         connection.close()
     except Exception as e:
         logger.error(f"Failed to publish message to queue {queue_name}: {str(e)}")
-        raise 
+        raise
+
+ 

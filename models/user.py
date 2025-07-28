@@ -37,6 +37,10 @@ class User(Base):
     persistent_data = relationship("PersistentData", back_populates="user", cascade="all, delete-orphan", lazy="select")
     # Audio generation jobs relationship
     audio_generation_jobs = relationship("AudioGenerationJob", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    # Audio chunks relationship
+    audio_chunks = relationship("AudioChunk", back_populates="user", cascade="all, delete-orphan", lazy="select")
+    # Audiobook generations relationship
+    audiobook_generations = relationship("AudiobookGeneration", back_populates="user", cascade="all, delete-orphan", lazy="select")
 
 class OAuthAccount(Base):
     __tablename__ = "oauth_account"

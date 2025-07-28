@@ -4,84 +4,17 @@ from models.job_status import JobStatus
 from typing import Optional, Dict, Any, List
 from enum import Enum
 from schemas.book import BookDataProcessingJob
-
-class Language(str, Enum):
-    CHINESE = "Chinese"
-    CHINESE_YUE = "Chinese,Yue"
-    ENGLISH = "English"
-    ARABIC = "Arabic"
-    RUSSIAN = "Russian"
-    SPANISH = "Spanish"
-    FRENCH = "French"
-    PORTUGUESE = "Portuguese"
-    GERMAN = "German"
-    TURKISH = "Turkish"
-    DUTCH = "Dutch"
-    UKRAINIAN = "Ukrainian"
-    VIETNAMESE = "Vietnamese"
-    INDONESIAN = "Indonesian"
-    JAPANESE = "Japanese"
-    ITALIAN = "Italian"
-    KOREAN = "Korean"
-    THAI = "Thai"
-    POLISH = "Polish"
-    ROMANIAN = "Romanian"
-    GREEK = "Greek"
-    CZECH = "Czech"
-    FINNISH = "Finnish"
-    HINDI = "Hindi"
-    AUTO = "auto"
-
-class VoiceId(str, Enum):
-    WISE_WOMAN = "Wise_Woman"
-    FRIENDLY_PERSON = "Friendly_Person"
-    INSPIRATIONAL_GIRL = "Inspirational_girl"
-    DEEP_VOICE_MAN = "Deep_Voice_Man"
-    CALM_WOMAN = "Calm_Woman"
-    CASUAL_GUY = "Casual_Guy"
-    LIVELY_GIRL = "Lively_Girl"
-    PATIENT_MAN = "Patient_Man"
-    YOUNG_KNIGHT = "Young_Knight"
-    DETERMINED_MAN = "Determined_Man"
-    LOVELY_GIRL = "Lovely_Girl"
-    DECENT_BOY = "Decent_Boy"
-    IMPOSING_MANNER = "Imposing_Manner"
-    ELEGANT_MAN = "Elegant_Man"
-    ABBESS = "Abbess"
-    SWEET_GIRL_2 = "Sweet_Girl_2"
-    EXUBERANT_GIRL = "Exuberant_Girl"
-
-class SampleRate(int, Enum):
-    SR_8000 = 8000
-    SR_16000 = 16000
-    SR_22050 = 22050
-    SR_24000 = 24000
-    SR_32000 = 32000
-    SR_44100 = 44100
-
-class BitRate(int, Enum):
-    BR_32000 = 32000
-    BR_64000 = 64000
-    BR_128000 = 128000
-    BR_256000 = 256000
-
-class VoiceEmotion(str, Enum):
-    HAPPY = "happy"
-    SAD = "sad"
-    ANGRY = "angry"
-    FEARFUL = "fearful"
-    DISGUSTED = "disgusted"
-    SURPRISED = "surprised"
-    NEUTRAL = "neutral"
+from schemas.audio_config import SampleRate, BitRate, VoiceEmotion, VoiceId, Language, AudioFormat
 
 class AudioSettings(BaseModel):
     sample_rate: SampleRate = Field(default=SampleRate.SR_32000, description="Audio sample rate in Hz")
     bitrate: BitRate = Field(default=BitRate.BR_256000, description="Audio bitrate in bps")
     channel: int = Field(default=1, ge=1, le=2, description="Number of audio channels (1 for mono, 2 for stereo)")
+    format: AudioFormat = Field(default=AudioFormat.mp3, description="Audio format")
 
 class VoiceSettings(BaseModel):
     voice_id: VoiceId = Field(
-        default=VoiceId.WISE_WOMAN,
+        default=VoiceId.Wise_Woman,
         description="Predefined voice ID to use for synthesis"
     )
     speed: float = Field(
@@ -103,7 +36,7 @@ class VoiceSettings(BaseModel):
         description="Voice pitch (-12 to 12)"
     )
     emotion: Optional[VoiceEmotion] = Field(
-        default=VoiceEmotion.NEUTRAL,
+        default=VoiceEmotion.neutral,
         description="Emotion of the generated speech"
     )
     english_normalization: bool = Field(
@@ -112,7 +45,7 @@ class VoiceSettings(BaseModel):
     )
 
 class AudioGenerationRequest(BaseModel):
-    language_boost: Language = Field(default=Language.AUTO, description="Language to optimize the audio generation for")
+    language_boost: Language = Field(default=Language.auto, description="Language to optimize the audio generation for")
     audio_settings: AudioSettings = Field(default_factory=AudioSettings, description="Audio output settings")
     voice_settings: VoiceSettings = Field(default_factory=VoiceSettings, description="Voice synthesis settings")
     pronunciation_dict: Dict[str, List[str]] = Field(
