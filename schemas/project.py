@@ -59,10 +59,10 @@ class BookInProject(BaseModel):
 class ProjectBase(BaseModel):
     title: str
     description: Optional[str] = None
-    tags: Optional[List[str]] = None
-    data: Optional[Dict[str, Any]] = None
+    tags: Optional[List[str]] = []
+    data: Optional[Dict[str, Any]] = {}
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = Field(default_factory=lambda: datetime.now(timezone.utc))
 
     class Config:
         from_attributes = True
@@ -82,8 +82,8 @@ class ProjectResponse(BaseModel):
     id: int
     title: str
     description: str = None
-    tags: List[str] = None
-    data: Optional[dict] = None
+    tags: List[str] = []
+    data: Optional[dict] = {}
     user_id: int
     books: List[BookInProject] = []
     created_at: Optional[datetime] = None
