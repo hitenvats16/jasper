@@ -9,13 +9,13 @@ from models import (
     Voice,
     Config,
     AudiobookGeneration,
-    AudiobookType
+    AudiobookType,
 )
 from core.config import settings
 import logging
 import sys
 from utils.s3 import load_file_from_s3, upload_file_to_s3
-from workers.audio_generation.silence import create_silence_strategy
+from workers.audio_generation.silence import create_silence_strategy, SilencingStrategies
 from workers.audio_generation.tts import MinimaxAudioStrategy
 from services.credit_service import CreditService
 import traceback
@@ -71,13 +71,12 @@ class AudioGenerator(BaseWorker):
         if audio_generation_params:
             audio_gen_params.update(audio_generation_params)
 
-        user_config = db.query(Config).filter(Config.user_id == user.id).first()
-        silence_strategy_type = user_config.silence_strategy
-        silence_data = user_config.silence_data
+        silence_strategy_type = user.config.silence_strategy if user.config else SilencingStrategies.FIXED_SILENCING.value
+        silence_data = user.config.silence_data if user.config else {}
 
         silence_strategy = create_silence_strategy(silence_strategy_type, silence_data)
-        splitted_content = split_content_by_commands(chapter_data, user_config)
-
+        splitted_content = split_content_by_commands(chapter_data, config)
+        logger.info(f"[AudioGenerator] The splitted content: {splitted_content}")
         audio_strategy = MinimaxAudioStrategy()
         chunking_strategy = QuoteAwareTTSTextSplittingStrategy(max_tokens=500)
 
@@ -87,14 +86,14 @@ class AudioGenerator(BaseWorker):
         all_audio_arrays = []
         successful_chunks = 0
         for index, chunk in enumerate(splitted_content):
-            text_content = chunk.get("text_content")
+            text_content = chunk.get("content")
             part_voice_id = chunk.get("voice_id")
             emotion = chunk.get("emotion")
             
             if emotion: 
                 audio_gen_params["voice_settings"]["emotion"] = emotion
 
-            text_chunks_with_metadata = chunking_strategy.chunk_stream(text_content)
+            text_chunks_with_metadata = list(chunking_strategy.chunk_stream(text_content))
 
             for i, (chunk_text, is_paragraph_end) in enumerate(text_chunks_with_metadata):
                 cnt += 1
@@ -110,12 +109,10 @@ class AudioGenerator(BaseWorker):
                 if chunk_buffer and chunk_buffer.getbuffer().nbytes > 0:
                     # Convert BytesIO buffer to numpy array for processing
                     chunk_buffer.seek(0)
-
+                    voice_id = voice.id
                     # Applying voice to the chunk
                     if part_voice_id is not None:
                         voice_id = part_voice_id
-                    else:
-                        voice_id = voice.id
 
                     voice = db.query(Voice).filter(Voice.id == voice_id).first()
 
@@ -128,13 +125,20 @@ class AudioGenerator(BaseWorker):
 
                     chunk_buffer.seek(0)
 
+                    # Create a copy of the buffer for audio processing (before S3 upload)
+                    chunk_buffer_copy = io.BytesIO(chunk_buffer.getvalue())
+                    chunk_buffer_copy.seek(0)
+
                     # Saving the chunk buffer to s3 and creating a db entry
                     file_name = f"{cnt}_{uuid.uuid4()}.{file_extension}"
                     s3_key = f"audio_chunks/{job.id}/{cnt}_{uuid.uuid4()}.{file_extension}"
-                    upload_file_to_s3(chunk_buffer, filename=file_name, s3_key=s3_key)
+                    upload_file_to_s3(chunk_buffer, filename=file_name, custom_key=s3_key)
+                    
+                    logger.info(f"[AudioGenerator] The final chunk uploaded to S3: {file_name}")
+                    
                     # Load audio with proper format detection (don't assume wav)
-                    chunk_audio_segment = AudioSegment.from_file(chunk_buffer)
-
+                    chunk_audio_segment = AudioSegment.from_file(chunk_buffer_copy)
+                    logger.info(f"[AudioGenerator] The chunk audio segment: {chunk_audio_segment}")
                     # Get the original sample rate from the audio segment
                     original_sample_rate = chunk_audio_segment.frame_rate
                     logger.info(f"Original audio sample rate: {original_sample_rate} Hz")
@@ -168,7 +172,6 @@ class AudioGenerator(BaseWorker):
                             )
 
                     all_audio_arrays.append(chunk_wav_data)
-                    self.cb(chunk_text, chunk_buffer)
                     successful_chunks += 1
             
             if successful_chunks == 0:
@@ -214,7 +217,9 @@ class AudioGenerator(BaseWorker):
                 return
 
             # Get book data from S3
-            book_data_buffer = load_file_from_s3(job.input_data_s3_key)
+            import io
+            book_data_buffer = io.BytesIO()
+            load_file_from_s3(job.input_data_s3_key, book_data_buffer)
             book_data_buffer.seek(0)
             logger.info(f"Book data buffer: {book_data_buffer}")
             book_data = json.load(book_data_buffer)
@@ -224,7 +229,7 @@ class AudioGenerator(BaseWorker):
                 job_estimate = estimate_job_cost(
                     db=db, chapters=book_data.get("chapters", []), user_id=job.user_id
                 )
-                logger.info(f"Job estimate: {job_estimate} for user {job.user_id} and book {job.book_id}")
+                logger.info(f"Job estimate: {job_estimate} for user {job.user_id}")
             except Exception as e:
                 logger.error(f"Failed to estimate job cost: {str(e)}")
                 raise RuntimeError(f"Cost estimation failed: {str(e)}")
@@ -280,7 +285,7 @@ class AudioGenerator(BaseWorker):
                     "PROCESSING",
                     {
                         "message": "Started processing chapters",
-                        "total_chapters": len(job.data),
+                        "total_chapters": len(book_data.get("chapters", [])),
                     },
                     db=db,
                 )
@@ -292,11 +297,6 @@ class AudioGenerator(BaseWorker):
                 
                 processed_chapters = 0
                 failed_chapters = 0
-
-                silence_strategy = create_silence_strategy(
-                    silence_strategy_type=user.config.silence_strategy,
-                    silence_data=user.config.silence_data,
-                )
 
                 full_audio_buffer = io.BytesIO()
 
@@ -318,10 +318,17 @@ class AudioGenerator(BaseWorker):
                             db=db
                         )
 
+                        # Get buffer information before uploading
+                        audio_buffer.seek(0)
+                        buffer_size = audio_buffer.getbuffer().nbytes
+                        sample_rate = job.job_metadata.get("voice_gen_params", {}).get("audio_settings", {}).get("sample_rate", 16000)
+                        duration = buffer_size / (2 * sample_rate)
+                        audio_data = audio_buffer.getvalue()
+                        
                         # Upload audio to s3
                         file_name = f"{chapter.get('chapter_id')}.wav"
                         s3_key = f"audio_generation/{job.id}/{file_name}"
-                        upload_file_to_s3(audio_buffer, filename=file_name, s3_key=s3_key)
+                        upload_file_to_s3(audio_buffer, filename=file_name, custom_key=s3_key)
 
                         # Create audiobook generation entry
                         audiobook_generation = AudiobookGeneration(
@@ -333,13 +340,21 @@ class AudioGenerator(BaseWorker):
                             index=index,
                             created_at=datetime.now(timezone.utc),
                             updated_at=datetime.now(timezone.utc),
+                            audio_generation_job_id=job.id,
+                            data={
+                                "title": book_data.get("title", "full_audio"),
+                                "author": book_data.get("author", ""),
+                                "narrator": voice.name,
+                                "duration": duration,
+                                "size_bytes": buffer_size,
+                            }
                         )
                         db.add(audiobook_generation)
                         db.commit()
                         db.refresh(audiobook_generation)
 
-                        # buffer to the full audio buffer
-                        full_audio_buffer.write(audio_buffer.getvalue())
+                        # Add audio data to the full audio buffer
+                        full_audio_buffer.write(audio_data)
 
                         # Add silence to the full audio buffer
                         silence_ms = 500 # 500ms silence between chapters (TODO: make it configurable)
@@ -360,10 +375,16 @@ class AudioGenerator(BaseWorker):
                         # Continue with other chapters even if one fails
                         continue
                 
+                # Get buffer information before uploading
+                full_audio_buffer.seek(0)
+                buffer_size = full_audio_buffer.getbuffer().nbytes
+                sample_rate = job.job_metadata.get("voice_gen_params", {}).get("audio_settings", {}).get("sample_rate", 16000)
+                duration = buffer_size / (2 * sample_rate)
+                
                 # Upload full audio to s3
-                file_name = f"{uuid.uuid4()}.wav"
+                file_name = f"{book_data.get('title', 'full_audio')}.wav"
                 s3_key = f"audio_generation/{job.id}/{file_name}"
-                upload_file_to_s3(full_audio_buffer, filename=file_name, s3_key=s3_key)
+                upload_file_to_s3(full_audio_buffer, filename=file_name, custom_key=s3_key)
 
                 # Create audiobook generation entry
                 audiobook_generation = AudiobookGeneration(
@@ -375,6 +396,14 @@ class AudioGenerator(BaseWorker):
                     index=None,
                     created_at=datetime.now(timezone.utc),
                     updated_at=datetime.now(timezone.utc),
+                    audio_generation_job_id=job.id,
+                    data={
+                        "title": book_data.get("title", "full_audio"),
+                        "author": book_data.get("author", ""),
+                        "narrator": voice.name,
+                        "duration": duration,
+                        "size_bytes": buffer_size,
+                    }
                 )
                 db.add(audiobook_generation)
                 db.commit()
@@ -391,7 +420,7 @@ class AudioGenerator(BaseWorker):
                             "message": "Voice generation completed successfully",
                             "processed_chapters": processed_chapters,
                             "failed_chapters": failed_chapters,
-                            "total_chapters": len(job.data),
+                            "total_chapters": len(book_data.get("chapters", [])),
                         },
                         db=db,
                     )
@@ -404,7 +433,7 @@ class AudioGenerator(BaseWorker):
                             "message": f"Voice generation completed with {failed_chapters} failed chapters",
                             "processed_chapters": processed_chapters,
                             "failed_chapters": failed_chapters,
-                            "total_chapters": len(job.data),
+                            "total_chapters": len(book_data.get("chapters", [])),
                         },
                         db=db,
                     )

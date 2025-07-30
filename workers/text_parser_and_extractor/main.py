@@ -9,7 +9,7 @@ from datetime import datetime
 import sys
 import os
 import json
-from utils.s3 import load_file_from_s3, upload_file_to_s3
+from utils.s3 import load_file_from_s3
 import io
 
 # Configure logging

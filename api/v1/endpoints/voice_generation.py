@@ -6,6 +6,7 @@ from models.user import User
 from models.project import Project
 from models.audio_generation_job import AudioGenerationJob
 from models.job_status import JobStatus
+from models.audiobook_generation import AudiobookGeneration, AudiobookType
 from schemas.audio_generation import (
     AudioGenerationResponse,
     AudioGenerationRequest,
@@ -92,11 +93,45 @@ current_user: User = Depends(get_current_user)
     # Execute query
     jobs = query.all()
 
+    # Enhance jobs with audiobook generation data
+    enhanced_jobs = []
+    for job in jobs:
+        # Get chapterwise audios (ordered by index)
+        chapterwise_audios = db.query(AudiobookGeneration).filter(
+            AudiobookGeneration.audio_generation_job_id == job.id,
+            AudiobookGeneration.type == AudiobookType.CHAPTERWISE_AUDIO
+        ).order_by(AudiobookGeneration.index.asc()).all()
+        
+        # Get full audio
+        full_audio = db.query(AudiobookGeneration).filter(
+            AudiobookGeneration.audio_generation_job_id == job.id,
+            AudiobookGeneration.type == AudiobookType.FULL_AUDIO
+        ).first()
+        
+        # Create enhanced job object
+        enhanced_job = AudioGenerationJobRead(
+            id=job.id,
+            user_id=job.user_id,
+            project_id=job.project_id,
+            voice_id=job.voice_id,
+            input_data_s3_key=job.input_data_s3_key,
+            job_metadata=job.job_metadata,
+            result=job.result,
+            status=job.status,
+            created_at=job.created_at,
+            ended_at=job.ended_at,
+            s3_url=job.s3_url,
+            chapterwise_audios=chapterwise_audios if chapterwise_audios else [],
+            full_audio=full_audio if full_audio else None,
+            has_full_audio=full_audio is not None
+        )
+        enhanced_jobs.append(enhanced_job)
+
     # Calculate total pages
     total_pages = (total_count + filters.page_size - 1) // filters.page_size
 
     return AudioGenerationJobListResponse(
-        items=jobs,
+        items=enhanced_jobs,
         total=total_count,
         page=filters.page,
         page_size=filters.page_size,

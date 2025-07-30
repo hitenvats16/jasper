@@ -5,6 +5,7 @@ from typing import Optional, Dict, Any, List
 from enum import Enum
 from schemas.book import BookDataProcessingJob
 from schemas.audio_config import SampleRate, BitRate, VoiceEmotion, VoiceId, Language, AudioFormat
+from models.audiobook_generation import AudiobookType
 
 class AudioSettings(BaseModel):
     sample_rate: SampleRate = Field(default=SampleRate.SR_32000, description="Audio sample rate in Hz")
@@ -85,6 +86,18 @@ class AudioJobSortField(str, Enum):
     STATUS = "status"
     PROJECT_ID = "project_id"
 
+class AudiobookGenerationRead(BaseModel):
+    """Schema for audiobook generation data"""
+    id: int
+    key: str
+    data: Optional[Dict[str, Any]] = None
+    created_at: datetime
+    updated_at: datetime
+    s3_url: Optional[HttpUrl] = None
+
+    class Config:
+        from_attributes = True
+
 class AudioGenerationJobRead(BaseModel):
     id: int
     user_id: int
@@ -97,6 +110,10 @@ class AudioGenerationJobRead(BaseModel):
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ended_at: Optional[datetime] = None
     s3_url: Optional[HttpUrl] = None
+    # New fields for audiobook generation
+    chapterwise_audios: Optional[List[AudiobookGenerationRead]] = None
+    full_audio: Optional[AudiobookGenerationRead] = None
+    has_full_audio: bool = False
 
     class Config:
         from_attributes = True

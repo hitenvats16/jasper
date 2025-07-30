@@ -4,8 +4,6 @@ from core.config import settings
 from enum import Enum
 from pydantic import BaseModel, HttpUrl
 from typing import Optional
-import io
-import uuid
 
 class FalModels(str, Enum):
     MINIMAX_SPEECH_02_HD_TTS = "fal-ai/minimax/speech-02-hd"
@@ -27,14 +25,6 @@ class FalSynthesizeResponse(BaseModel):
     audio: FalAudioResponse
     duration_ms: int # Duration of the audio in milliseconds
 
-class FalUtils:
-    @staticmethod
-    def upload_file(file_buffer: io.BytesIO, file_name: str) -> str:
-        file_path = f"temp_files/{uuid.uuid4()}_{uuid.uuid4()}_{file_name}.wav"
-        with open(file_path, "wb") as f:
-            f.write(file_buffer.getvalue())
-        return fal_client.upload_file(file_path)
-
 class FalTTSClient:
     def __init__(self, model_name: FalModels):
         self.model_name = model_name
@@ -49,7 +39,7 @@ class FalTTSClient:
         print(f"[FalTTSClient] Synthesizing text: {text}")
         arguments = {"text": text}
         if kwargs:
-            arguments.update(kwargs.model_dump())
+            arguments.update(kwargs)
         # Remove all keys from arguments where the value is None
         arguments = {k: v for k, v in arguments.items() if v is not None}
         result = self.client.subscribe(
@@ -74,7 +64,7 @@ class FalSTSClient:
     def synthesize(self, kwargs: dict) -> FalAudioResponse:
         arguments = {}
         if kwargs:
-            arguments.update(kwargs.model_dump())
+            arguments.update(kwargs)
         # Remove all keys from arguments where the value is None
         arguments = {k: v for k, v in arguments.items() if v is not None}
         result = self.client.subscribe(

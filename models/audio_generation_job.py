@@ -30,7 +30,8 @@ class AudioGenerationJob(Base):
     user = relationship("User", back_populates="audio_generation_jobs", lazy="select")
     project = relationship("Project", back_populates="audio_generation_jobs", lazy="select")
     voice = relationship("Voice", back_populates="audio_generation_jobs", lazy="select")
-    audio_chunks = relationship("AudioChunk", back_populates="audio_generation_job", lazy="select", cascade="all, delete-orphan") 
+    audio_chunks = relationship("AudioChunk", back_populates="audio_generation_job", lazy="select", cascade="all, delete-orphan")
+    audiobook_generations = relationship("AudiobookGeneration", back_populates="audio_generation_job", lazy="select", cascade="all, delete-orphan") 
 
     @property
     def s3_url(self):
@@ -43,16 +44,6 @@ class AudioGenerationJob(Base):
         # Publish job ID to VOICE_GENERATION_QUEUE
         message = {"job_id": self.id}
         publish_to_queue(settings.VOICE_GENERATION_QUEUE, message)
-        
-    def on_update_trigger(self, old_status=None):
-        """Trigger method called when an AudioGenerationJob is updated"""
-        logger.info(f"AudioGenerationJob updated: ID={self.id}, Status={self.status}")
-        if old_status and old_status != self.status:
-            logger.info(f"Status changed from {old_status} to {self.status}")
-        
-        # Publish job ID to VOICE_GENERATION_QUEUE
-        message = {"job_id": self.id}
-        publish_to_queue(settings.VOICE_GENERATION_QUEUE, message)
 
 
 # SQLAlchemy event listeners for triggers
@@ -60,16 +51,4 @@ class AudioGenerationJob(Base):
 def trigger_after_insert(mapper, connection, target):
     """Trigger after a new AudioGenerationJob is inserted"""
     target.on_create_trigger()
-
-@event.listens_for(AudioGenerationJob, 'after_update')
-def trigger_after_update(mapper, connection, target):
-    """Trigger after an AudioGenerationJob is updated"""
-    # Get the old status from the session if available
-    old_status = None
-    if hasattr(target, '_sa_instance_state'):
-        state = target._sa_instance_state
-        if hasattr(state, 'attrs') and 'status' in state.attrs:
-            old_status = state.attrs['status'].history.deleted[0] if state.attrs['status'].history.deleted else None
-    
-    target.on_update_trigger(old_status)
     

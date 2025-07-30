@@ -30,6 +30,11 @@ class BaseWorker(ABC):
             parameters = pika.URLParameters(
                 url=connection_url
             )
+            # Set connection parameters after URL parsing
+            parameters.heartbeat = 60  # 60 second heartbeat
+            parameters.blocked_connection_timeout = 30  # 30 second timeout
+            parameters.connection_attempts = 3  # Retry connection 3 times
+            parameters.retry_delay = 5  # Wait 5 seconds between retries
             self.connection = pika.BlockingConnection(parameters)
             self.channel = self.connection.channel()
             
@@ -70,6 +75,17 @@ class BaseWorker(ABC):
             # Acknowledge message
             ch.basic_ack(delivery_tag=method.delivery_tag)
             logger.info(f"Successfully processed message from queue {self.queue_name}")
+            
+        except pika.exceptions.AMQPConnectionError as e:
+            logger.error(f"AMQP Connection error during message processing: {str(e)}")
+            # Don't acknowledge the message, let it be requeued
+            raise
+            
+        except pika.exceptions.StreamLostError as e:
+            logger.error(f"Stream lost error during message processing: {str(e)}")
+            # Don't acknowledge the message, let it be requeued
+            raise
+            
         except Exception as e:
             logger.error(f"Error processing message: {str(e)}")
             
@@ -141,17 +157,45 @@ class BaseWorker(ABC):
         pass
 
     def start(self):
-        """Start consuming messages from the queue"""
-        try:
-            self.channel.basic_consume(
-                queue=self.queue_name,
-                on_message_callback=self.process_message
-            )
-            logger.info(f"Started consuming messages from queue: {self.queue_name}")
-            self.channel.start_consuming()
-        except Exception as e:
-            logger.error(f"Error consuming messages: {str(e)}")
-            raise
+        """Start consuming messages from the queue with automatic reconnection"""
+        while True:
+            try:
+                # Check if connection is still alive, reconnect if needed
+                if not self.connection or self.connection.is_closed:
+                    logger.info("Connection lost, attempting to reconnect...")
+                    self.connect()
+                
+                self.channel.basic_consume(
+                    queue=self.queue_name,
+                    on_message_callback=self.process_message
+                )
+                logger.info(f"Started consuming messages from queue: {self.queue_name}")
+                self.channel.start_consuming()
+                
+            except pika.exceptions.AMQPConnectionError as e:
+                logger.error(f"AMQP Connection error: {str(e)}")
+                logger.info("Attempting to reconnect in 5 seconds...")
+                import time
+                time.sleep(5)
+                continue
+                
+            except pika.exceptions.StreamLostError as e:
+                logger.error(f"Stream lost error: {str(e)}")
+                logger.info("Attempting to reconnect in 5 seconds...")
+                import time
+                time.sleep(5)
+                continue
+                
+            except KeyboardInterrupt:
+                logger.info("Received keyboard interrupt, shutting down...")
+                break
+                
+            except Exception as e:
+                logger.error(f"Unexpected error in message consumption: {str(e)}")
+                logger.info("Attempting to reconnect in 5 seconds...")
+                import time
+                time.sleep(5)
+                continue
 
     def close(self):
         """Close the RabbitMQ connection"""

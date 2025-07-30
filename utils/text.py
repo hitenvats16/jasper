@@ -47,7 +47,7 @@ def split_content_by_commands(chapter, config) -> list[dict]:
             "emotion": None
         }]
 
-    commands = config[chapter_id]
+    commands = config[chapter_id] 
     
     # --- 1. Collect all unique split points ---
     # We start with 0 and the total length of the content.

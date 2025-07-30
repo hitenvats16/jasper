@@ -20,6 +20,8 @@ from utils.message_publisher import message_publisher
 from core.dependencies import get_db, get_current_user
 import uuid
 import logging
+import io
+from pydub import AudioSegment
 
 logger = logging.getLogger(__name__)
 
@@ -152,8 +154,30 @@ async def create_voice(
     except Exception:
         raise HTTPException(status_code=400, detail="Invalid metadata JSON")
 
-    # Upload file to S3
-    s3_key = upload_file_to_s3(file.file, file.filename)
+    # Read the uploaded file into memory
+    file_content = file.file.read()
+    file.file.seek(0)  # Reset file pointer for potential future use
+    
+    # Load audio using pydub
+    try:
+        audio = AudioSegment.from_file(io.BytesIO(file_content))
+    except Exception as e:
+        logger.error(f"Failed to load audio file: {str(e)}")
+        raise HTTPException(status_code=400, detail="Invalid audio file format")
+    
+    # Trim audio to first 15 seconds (15000 milliseconds)
+    max_duration_ms = 15000
+    if len(audio) > max_duration_ms:
+        audio = audio[:max_duration_ms]
+        logger.info(f"Trimmed audio from {len(audio)}ms to {max_duration_ms}ms")
+    
+    # Export the trimmed audio to a buffer
+    output_buffer = io.BytesIO()
+    audio.export(output_buffer, format=file.filename.split('.')[-1] if '.' in file.filename else 'mp3')
+    output_buffer.seek(0)
+    
+    # Upload trimmed file to S3
+    s3_key = upload_file_to_s3(output_buffer, file.filename)
 
     # Create voice record
     voice = Voice(
