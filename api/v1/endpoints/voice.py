@@ -165,8 +165,8 @@ async def create_voice(
         logger.error(f"Failed to load audio file: {str(e)}")
         raise HTTPException(status_code=400, detail="Invalid audio file format")
     
-    # Trim audio to first 15 seconds (15000 milliseconds)
-    max_duration_ms = 15000
+    # Trim audio to first 120 seconds (120000 milliseconds)
+    max_duration_ms = 120000
     if len(audio) > max_duration_ms:
         audio = audio[:max_duration_ms]
         logger.info(f"Trimmed audio from {len(audio)}ms to {max_duration_ms}ms")
