@@ -14,7 +14,7 @@ from schemas.audio_generation import (
     AudioGenerationJobFilters,
     AudioGenerationJobListResponse,
     AudioJobSortField,
-    SortOrder
+    SortOrder,
 )
 from utils.s3 import upload_file_to_s3
 from typing import Optional
@@ -25,6 +25,7 @@ from io import BytesIO
 from sqlalchemy import or_, and_, desc, asc, func, cast, JSON
 
 router = APIRouter()
+
 
 @router.get(
     "/jobs",
@@ -38,12 +39,12 @@ router = APIRouter()
     - Job Status
     - Language
     - Creation and End Time ranges
-    """
+    """,
 )
 async def list_audio_generation_jobs(
     filters: AudioGenerationJobFilters = Depends(),
     db: Session = Depends(get_db),
-current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     # Start with base query
     query = db.query(AudioGenerationJob).filter(
@@ -51,29 +52,33 @@ current_user: User = Depends(get_current_user)
     )
 
     # Apply filters
+    if filters.job_id is not None:
+        query = query.filter(AudioGenerationJob.id == filters.job_id)
+
     if filters.project_id is not None:
         query = query.filter(AudioGenerationJob.project_id == filters.project_id)
-    
+
     if filters.voice_id is not None:
         query = query.filter(AudioGenerationJob.voice_id == filters.voice_id)
-    
+
     if filters.status is not None:
         query = query.filter(AudioGenerationJob.status == filters.status)
-    
+
     if filters.language is not None:
         query = query.filter(
-            cast(AudioGenerationJob.job_metadata, JSON)['language_boost'].astext == filters.language.value
+            cast(AudioGenerationJob.job_metadata, JSON)["language_boost"].astext
+            == filters.language.value
         )
-    
+
     if filters.created_after is not None:
         query = query.filter(AudioGenerationJob.created_at >= filters.created_after)
-    
+
     if filters.created_before is not None:
         query = query.filter(AudioGenerationJob.created_at <= filters.created_before)
-    
+
     if filters.ended_after is not None:
         query = query.filter(AudioGenerationJob.ended_at >= filters.ended_after)
-    
+
     if filters.ended_before is not None:
         query = query.filter(AudioGenerationJob.ended_at <= filters.ended_before)
 
@@ -88,7 +93,9 @@ current_user: User = Depends(get_current_user)
         query = query.order_by(asc(sort_column))
 
     # Apply pagination
-    query = query.offset((filters.page - 1) * filters.page_size).limit(filters.page_size)
+    query = query.offset((filters.page - 1) * filters.page_size).limit(
+        filters.page_size
+    )
 
     # Execute query
     jobs = query.all()
@@ -97,17 +104,26 @@ current_user: User = Depends(get_current_user)
     enhanced_jobs = []
     for job in jobs:
         # Get chapterwise audios (ordered by index)
-        chapterwise_audios = db.query(AudiobookGeneration).filter(
-            AudiobookGeneration.audio_generation_job_id == job.id,
-            AudiobookGeneration.type == AudiobookType.CHAPTERWISE_AUDIO
-        ).order_by(AudiobookGeneration.index.asc()).all()
-        
+        chapterwise_audios = (
+            db.query(AudiobookGeneration)
+            .filter(
+                AudiobookGeneration.audio_generation_job_id == job.id,
+                AudiobookGeneration.type == AudiobookType.CHAPTERWISE_AUDIO,
+            )
+            .order_by(AudiobookGeneration.index.asc())
+            .all()
+        )
+
         # Get full audio
-        full_audio = db.query(AudiobookGeneration).filter(
-            AudiobookGeneration.audio_generation_job_id == job.id,
-            AudiobookGeneration.type == AudiobookType.FULL_AUDIO
-        ).first()
-        
+        full_audio = (
+            db.query(AudiobookGeneration)
+            .filter(
+                AudiobookGeneration.audio_generation_job_id == job.id,
+                AudiobookGeneration.type == AudiobookType.FULL_AUDIO,
+            )
+            .first()
+        )
+
         # Create enhanced job object
         enhanced_job = AudioGenerationJobRead(
             id=job.id,
@@ -123,7 +139,7 @@ current_user: User = Depends(get_current_user)
             s3_url=job.s3_url,
             chapterwise_audios=chapterwise_audios if chapterwise_audios else [],
             full_audio=full_audio if full_audio else None,
-            has_full_audio=full_audio is not None
+            has_full_audio=full_audio is not None,
         )
         enhanced_jobs.append(enhanced_job)
 
@@ -135,8 +151,9 @@ current_user: User = Depends(get_current_user)
         total=total_count,
         page=filters.page,
         page_size=filters.page_size,
-        total_pages=total_pages
+        total_pages=total_pages,
     )
+
 
 @router.post(
     "/audiobook/{project_id}/{voice_id}",
@@ -145,42 +162,44 @@ current_user: User = Depends(get_current_user)
     description="""
     Create an audio generation job for a book in a project using the specified voice.
     The book data should be in the processed format (BookDataProcessingJob).
-    """
+    """,
 )
 async def generate_audiobook(
     project_id: int,
     voice_id: int,
     request: AudioGenerationRequest,
     db: Session = Depends(get_db),
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_user),
 ):
     # Verify project exists and belongs to user
-    project = db.query(Project).filter(
-        Project.id == project_id,
-        Project.user_id == current_user.id,
-        Project.is_deleted == False
-    ).first()
+    project = (
+        db.query(Project)
+        .filter(
+            Project.id == project_id,
+            Project.user_id == current_user.id,
+            Project.is_deleted == False,
+        )
+        .first()
+    )
     if not project:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Project not found or access denied"
+            detail="Project not found or access denied",
         )
 
     # Generate unique S3 key for the processed data
     s3_key = f"preprocessed_audiobook/{current_user.id}_{project_id}_{uuid4()}.json"
-    
+
     try:
         # Convert book data to JSON and create a file-like object
         book_data_json = request.book_data.model_dump_json()
-        file_obj = BytesIO(book_data_json.encode('utf-8'))
-        
+        file_obj = BytesIO(book_data_json.encode("utf-8"))
+
         # Upload to S3
         upload_file_to_s3(
-            file_obj=file_obj,
-            filename=s3_key.split('/')[-1],
-            custom_key=s3_key
+            file_obj=file_obj, filename=s3_key.split("/")[-1], custom_key=s3_key
         )
-        
+
         # Create audio generation job
         job = AudioGenerationJob(
             user_id=current_user.id,
@@ -189,25 +208,25 @@ async def generate_audiobook(
             input_data_s3_key=s3_key,
             status=JobStatus.QUEUED,
             job_metadata={
-                "voice_gen_params": request.model_dump(exclude={'book_data'})
+                "voice_gen_params": request.model_dump(exclude={"book_data"})
             },
-            created_at=datetime.now(timezone.utc)
+            created_at=datetime.now(timezone.utc),
         )
-        
+
         db.add(job)
         db.commit()
         db.refresh(job)
-        
+
         return AudioGenerationResponse(
             job_id=job.id,
             status=job.status,
             created_at=job.created_at,
-            s3_url=job.s3_url
+            s3_url=job.s3_url,
         )
-        
+
     except Exception as e:
         db.rollback()
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to create audio generation job: {str(e)}"
-        ) 
+            detail=f"Failed to create audio generation job: {str(e)}",
+        )

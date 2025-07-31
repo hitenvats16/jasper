@@ -120,6 +120,7 @@ class AudioGenerationJobRead(BaseModel):
 
 class AudioGenerationJobFilters(BaseModel):
     """Query parameters for filtering audio generation jobs"""
+    job_id: Optional[int] = Field(None, description="Filter by specific job ID")
     project_id: Optional[int] = Field(None, description="Filter by project ID")
     voice_id: Optional[int] = Field(None, description="Filter by voice ID")
     status: Optional[JobStatus] = Field(None, description="Filter by job status")
