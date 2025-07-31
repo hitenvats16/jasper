@@ -36,12 +36,12 @@ class FalTTSClient:
                 print("[FalTTSClient]",log["message"])
 
     def synthesize(self, text: str, kwargs: dict) -> FalAudioResponse:
-        print(f"[FalTTSClient] Synthesizing text: {text}")
         arguments = {"text": text}
         if kwargs:
             arguments.update(kwargs)
         # Remove all keys from arguments where the value is None
         arguments = {k: v for k, v in arguments.items() if v is not None}
+        print(f"[FalTTSClient] Arguments: {arguments}")
         result = self.client.subscribe(
             self.model_name,
             arguments=arguments,
@@ -67,6 +67,7 @@ class FalSTSClient:
             arguments.update(kwargs)
         # Remove all keys from arguments where the value is None
         arguments = {k: v for k, v in arguments.items() if v is not None}
+        print(f"[FalSTSClient] Arguments: {arguments}")
         result = self.client.subscribe(
             self.model_name,
             arguments=arguments,

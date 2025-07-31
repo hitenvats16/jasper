@@ -47,8 +47,8 @@ class VoiceSettings(BaseModel):
 
 class AudioGenerationRequest(BaseModel):
     language_boost: Language = Field(default=Language.auto, description="Language to optimize the audio generation for")
-    audio_settings: AudioSettings = Field(default_factory=AudioSettings, description="Audio output settings")
-    voice_settings: VoiceSettings = Field(default_factory=VoiceSettings, description="Voice synthesis settings")
+    audio_setting: AudioSettings = Field(default_factory=AudioSettings, description="Audio output settings")
+    voice_setting: VoiceSettings = Field(default_factory=VoiceSettings, description="Voice synthesis settings")
     pronunciation_dict: Dict[str, List[str]] = Field(
         default_factory=lambda: {"tone_list": []},
         description="Pronunciation dictionary containing tone list"

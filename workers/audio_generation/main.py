@@ -91,7 +91,7 @@ class AudioGenerator(BaseWorker):
             emotion = chunk.get("emotion")
             
             if emotion: 
-                audio_gen_params["voice_settings"]["emotion"] = emotion
+                audio_gen_params["voice_setting"]["emotion"] = emotion
 
             text_chunks_with_metadata = list(chunking_strategy.chunk_stream(text_content))
 
@@ -144,10 +144,10 @@ class AudioGenerator(BaseWorker):
                     logger.info(f"Original audio sample rate: {original_sample_rate} Hz")
 
                     # Resample if necessary to match output sample rate
-                    if original_sample_rate != audio_gen_params.get("audio_settings", {}).get("sample_rate", 16000):
-                        logger.info(f"Resampling from {original_sample_rate} Hz to {audio_gen_params.get('audio_settings', {}).get('sample_rate', 16000)} Hz")
+                    if original_sample_rate != audio_gen_params.get("audio_setting", {}).get("sample_rate", 16000):
+                        logger.info(f"Resampling from {original_sample_rate} Hz to {audio_gen_params.get('audio_setting', {}).get('sample_rate', 16000)} Hz")
                         chunk_audio_segment = chunk_audio_segment.set_frame_rate(
-                            audio_gen_params.get("audio_settings", {}).get("sample_rate", 16000)
+                            audio_gen_params.get("audio_setting", {}).get("sample_rate", 16000)
                         )
 
                     # Convert to numpy array with proper normalization
@@ -163,7 +163,7 @@ class AudioGenerator(BaseWorker):
                         )   
                         logger.info(f"  - Adding {silence_ms}ms silence to chunk buffer.")
 
-                        silence_samples = int(silence_ms * self.output_sample_rate / 1000)
+                        silence_samples = int(silence_ms * audio_gen_params.get("audio_setting", {}).get("sample_rate", 32000) / 1000)
                         if silence_samples > 0:
                             silence_buffer = np.zeros(silence_samples, dtype=np.int16)
                             # Concatenate the chunk audio with silence
@@ -182,7 +182,7 @@ class AudioGenerator(BaseWorker):
         combined_audio_array = np.concatenate(all_audio_arrays)
 
         final_buffer = io.BytesIO()
-        wav_write(final_buffer, audio_gen_params.get("audio_settings", {}).get("sample_rate", 16000), combined_audio_array)
+        wav_write(final_buffer, audio_gen_params.get("audio_setting", {}).get("sample_rate", 16000), combined_audio_array)
         final_buffer.seek(0)
 
         return final_buffer
@@ -321,7 +321,7 @@ class AudioGenerator(BaseWorker):
                         # Get buffer information before uploading
                         audio_buffer.seek(0)
                         buffer_size = audio_buffer.getbuffer().nbytes
-                        sample_rate = job.job_metadata.get("voice_gen_params", {}).get("audio_settings", {}).get("sample_rate", 16000)
+                        sample_rate = job.job_metadata.get("voice_gen_params", {}).get("audio_setting", {}).get("sample_rate", 16000)
                         duration = buffer_size / (2 * sample_rate)
                         audio_data = audio_buffer.getvalue()
                         
@@ -358,7 +358,7 @@ class AudioGenerator(BaseWorker):
 
                         # Add silence to the full audio buffer
                         silence_ms = 500 # 500ms silence between chapters (TODO: make it configurable)
-                        silence_samples = int(silence_ms * job.job_metadata.get("voice_gen_params").get("audio_settings", {}).get("sample_rate", 16000) / 1000)
+                        silence_samples = int(silence_ms * job.job_metadata.get("voice_gen_params").get("audio_setting", {}).get("sample_rate", 16000) / 1000)
                         silence_buffer = np.zeros(silence_samples, dtype=np.int16)
                         full_audio_buffer.write(silence_buffer)
 
@@ -378,7 +378,7 @@ class AudioGenerator(BaseWorker):
                 # Get buffer information before uploading
                 full_audio_buffer.seek(0)
                 buffer_size = full_audio_buffer.getbuffer().nbytes
-                sample_rate = job.job_metadata.get("voice_gen_params", {}).get("audio_settings", {}).get("sample_rate", 16000)
+                sample_rate = job.job_metadata.get("voice_gen_params", {}).get("audio_setting", {}).get("sample_rate", 16000)
                 duration = buffer_size / (2 * sample_rate)
                 
                 # Upload full audio to s3
@@ -443,14 +443,14 @@ class AudioGenerator(BaseWorker):
 
                 # Deduct credits from user
                 try:
-                    logger.info(f"Deducting credits from user {job.user_id} for job {job_id}")
+                    logger.info(f"Deducting credits from user {user.id} for job {job_id}")
                     CreditService.deduct_credit(
                         db=db,
-                        user_id=job.user_id,
+                        user_id=user.id,
                         amount=job.total_cost,
                         description=f"Voice generation job completed",
                     )
-                    logger.info(f"{job.total_cost} credits deducted from user {user_id} for job {job_id}")
+                    logger.info(f"{job.total_cost} credits deducted from user {user.id} for job {job_id}")
                 except Exception as e:
                     logger.error(f"Failed to deduct credits: {str(e)}")
                     # Don't fail the entire job if credit deduction fails
