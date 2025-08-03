@@ -12,6 +12,8 @@ class AudioSettings(BaseModel):
     bitrate: BitRate = Field(default=BitRate.BR_256000, description="Audio bitrate in bps")
     channel: int = Field(default=1, ge=1, le=2, description="Number of audio channels (1 for mono, 2 for stereo)")
     format: AudioFormat = Field(default=AudioFormat.mp3, description="Audio format")
+    rms_target: float = Field(default=-20.0, ge=-60.0, le=0.0, description="Target RMS level in dB (typically -60 to 0)")
+    rms_tolerance: float = Field(default=1.0, ge=0.1, le=5.0, description="RMS tolerance in dB (0.1 to 5.0)")
 
 class VoiceSettings(BaseModel):
     voice_id: VoiceId = Field(
@@ -54,6 +56,8 @@ class AudioGenerationRequest(BaseModel):
         description="Pronunciation dictionary containing tone list"
     )
     book_data: BookDataProcessingJob = Field(default_factory=BookDataProcessingJob, description="Book data to generate audio from")
+    head_room_tone: int = Field(default=0, ge=0, le=10000, description="Room tone at the beginning in milliseconds (0-10000ms)")
+    end_room_tone: int = Field(default=0, ge=0, le=10000, description="Room tone at the end in milliseconds (0-10000ms)")
 
     @field_validator('pronunciation_dict')
     @classmethod

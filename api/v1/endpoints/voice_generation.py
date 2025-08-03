@@ -208,7 +208,14 @@ async def generate_audiobook(
             input_data_s3_key=s3_key,
             status=JobStatus.QUEUED,
             job_metadata={
-                "voice_gen_params": request.model_dump(exclude={"book_data"})
+                "voice_gen_params": {
+                    "audio_setting": request.audio_setting.model_dump(),
+                    "voice_setting": request.voice_setting.model_dump(),
+                    "pronunciation_dict": request.pronunciation_dict,
+                    "language_boost": request.language_boost.value,
+                },
+                "head_room_tone": request.head_room_tone,
+                "end_room_tone": request.end_room_tone,
             },
             created_at=datetime.now(timezone.utc),
         )

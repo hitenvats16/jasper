@@ -32,6 +32,7 @@ from scipy.io.wavfile import write as wav_write
 from workers.audio_generation.sts import ChatterboxSTS
 import uuid
 from datetime import datetime, timezone
+import math
 
 # Configure logging
 logging.basicConfig(
@@ -41,6 +42,49 @@ logging.basicConfig(
 )
 
 logger = logging.getLogger(__name__)
+
+def normalize_audio_rms(audio_array: np.ndarray, target_rms_db: float, tolerance_db: float = 1.0) -> np.ndarray:
+    """
+    Normalize audio to target RMS level in dB
+    
+    Args:
+        audio_array: Input audio array (int16)
+        target_rms_db: Target RMS level in dB
+        tolerance_db: Tolerance around target level in dB
+    
+    Returns:
+        Normalized audio array
+    """
+    if len(audio_array) == 0:
+        return audio_array
+    
+    # Convert to float for calculations
+    audio_float = audio_array.astype(np.float32) / 32768.0
+    
+    # Calculate current RMS
+    rms = np.sqrt(np.mean(audio_float ** 2))
+    if rms == 0:
+        return audio_array
+    
+    current_rms_db = 20 * math.log10(rms)
+    
+    # Calculate target RMS in linear scale
+    target_rms_linear = 10 ** (target_rms_db / 20)
+    
+    # Calculate gain needed
+    gain = target_rms_linear / rms
+    
+    # Apply gain with tolerance check
+    if abs(current_rms_db - target_rms_db) > tolerance_db:
+        audio_float = audio_float * gain
+        logger.info(f"RMS normalized: {current_rms_db:.2f}dB -> {20 * math.log10(np.sqrt(np.mean(audio_float ** 2))):.2f}dB (target: {target_rms_db:.2f}dB)")
+    else:
+        logger.info(f"RMS already within tolerance: {current_rms_db:.2f}dB (target: {target_rms_db:.2f}dB ±{tolerance_db}dB)")
+    
+    # Convert back to int16
+    audio_normalized = np.clip(audio_float * 32768.0, -32768, 32767).astype(np.int16)
+    
+    return audio_normalized
 
 class AudioGenerator(BaseWorker):
     def __init__(self):
@@ -78,7 +122,7 @@ class AudioGenerator(BaseWorker):
         splitted_content = split_content_by_commands(chapter_data, config)
         logger.info(f"[AudioGenerator] The splitted content: {splitted_content}")
         audio_strategy = MinimaxAudioStrategy()
-        chunking_strategy = QuoteAwareTTSTextSplittingStrategy(max_tokens=500)
+        chunking_strategy = QuoteAwareTTSTextSplittingStrategy(max_tokens=50)
 
         sts_strategy = ChatterboxSTS()
         cnt = 0
@@ -180,6 +224,30 @@ class AudioGenerator(BaseWorker):
             
             # Combine all audio arrays into a single numpy array
         combined_audio_array = np.concatenate(all_audio_arrays)
+
+        # Add room tone at the beginning and end if specified
+        head_room_tone_ms = job.job_metadata.get("head_room_tone", 0)
+        end_room_tone_ms = job.job_metadata.get("end_room_tone", 0)
+        
+        if head_room_tone_ms > 0:
+            head_room_samples = int(head_room_tone_ms * audio_gen_params.get("audio_setting", {}).get("sample_rate", 16000) / 1000)
+            head_room_buffer = np.zeros(head_room_samples, dtype=np.int16)
+            combined_audio_array = np.concatenate([head_room_buffer, combined_audio_array])
+            logger.info(f"Added {head_room_tone_ms}ms room tone at the beginning")
+        
+        if end_room_tone_ms > 0:
+            end_room_samples = int(end_room_tone_ms * audio_gen_params.get("audio_setting", {}).get("sample_rate", 16000) / 1000)
+            end_room_buffer = np.zeros(end_room_samples, dtype=np.int16)
+            combined_audio_array = np.concatenate([combined_audio_array, end_room_buffer])
+            logger.info(f"Added {end_room_tone_ms}ms room tone at the end")
+
+        # Apply RMS normalization if settings are provided
+        rms_target = audio_gen_params.get("audio_setting", {}).get("rms_target", -20.0)
+        rms_tolerance = audio_gen_params.get("audio_setting", {}).get("rms_tolerance", 1.0)
+        
+        if rms_target is not None and rms_tolerance is not None:
+            logger.info(f"Applying RMS normalization: target={rms_target}dB, tolerance={rms_tolerance}dB")
+            combined_audio_array = normalize_audio_rms(combined_audio_array, rms_target, rms_tolerance)
 
         final_buffer = io.BytesIO()
         wav_write(final_buffer, audio_gen_params.get("audio_setting", {}).get("sample_rate", 16000), combined_audio_array)

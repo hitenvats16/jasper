@@ -7,7 +7,9 @@ from typing import Optional
 
 class FalModels(str, Enum):
     MINIMAX_SPEECH_02_HD_TTS = "fal-ai/minimax/speech-02-hd"
-    CHATTERBOX_STS = "resemble-ai/chatterboxhd/speech-to-speech"
+    CHATTERBOX_STS_HD = "resemble-ai/chatterboxhd/speech-to-speech"
+    MINIMAX_SPEECH_02_TURBO_TTS = "fal-ai/minimax/speech-02-turbo"
+    CHATTERBOX_STS = "fal-ai/chatterbox/speech-to-speech"
 
 class FalSynthesisKwargs(BaseModel):
     audio_url: Optional[str] = None

@@ -23,7 +23,7 @@ class ChatterboxSTS(SpeechToSpeechStrategy):
     
     def __init__(self):
         self.client = FalSTSClient(
-            model_name=FalModels.CHATTERBOX_STS.value
+            model_name=FalModels.CHATTERBOX_STS_HD.value
         )
     
     def transform(self, source_audio_buffer: io.BytesIO, target_audio_url: str, kwargs: dict = None) -> Dict[str, Any]:
