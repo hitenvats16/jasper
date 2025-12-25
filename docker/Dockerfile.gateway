@@ -1,25 +1,28 @@
-FROM python:3.9-slim
+FROM python:3.9-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_NO_CACHE_DIR=1
 
 WORKDIR /code
 
-# Install system dependencies for building packages
-RUN apt-get update && apt-get install -y \
+# ---- System deps (cached aggressively) ----
+RUN apt-get update && apt-get install -y --no-install-recommends \
     git \
     gcc \
     g++ \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY ./requirements.txt /code/requirements.txt
+# ---- Python deps (BEST cache leverage) ----
+COPY requirements.txt .
 
-# Install Python dependencies with basic retry
-RUN pip install --no-cache-dir --upgrade -r /code/requirements.txt || \
-    (sleep 5 && pip install --no-cache-dir --upgrade -r /code/requirements.txt)
+RUN pip install --upgrade pip && \
+    pip install -r requirements.txt
 
-COPY . /code
-
-ENV PORT=8000
+# ---- App code (changes most often → last) ----
+COPY . .
 
 EXPOSE 8000
-
-CMD ["python", "-m", "main"] 
+CMD ["python", "-m", "main"]
